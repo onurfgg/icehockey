@@ -20,9 +20,7 @@
             display: flex; justify-content: center; align-items: center;
             height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif;
             overflow: hidden; flex-direction: column;
-            /* YENİ: Mobilde çift tıklama ile zoom yapılmasını ve metin seçimini engelle */
-            touch-action: none;
-            user-select: none;
+            user-select: none; /* Metin seçimini engelle */
         }
 
         /* SOSYAL MEDYA BUTONLARI */
@@ -67,6 +65,7 @@
             box-shadow: 0 0 50px rgba(59, 130, 246, 0.2), inset 0 0 40px rgba(255,255,255,1);
             border: 6px solid #94a3b8;
             cursor: pointer;
+            touch-action: none; /* YENİ: Mobilde kaydırmayı KESİN engeller, sürüklemeyi mükemmelleştirir */
         }
 
         .controls-info {
@@ -200,39 +199,46 @@
         let cornerTimer = 0;
         let aiRetreating = false;
 
-        // --- YENİ: DOKUNMATİK VE SÜRÜKLEME KONTROLLERİ ---
+        // --- YENİ: KUSURSUZ POINTER (DOKUNMATİK/FARE) SİSTEMİ ---
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // Mobil ve Mouse koordinatlarını Canvas'ın gerçek piksellerine çeviren fonksiyon
         function updateDragTarget(e) {
-            e.preventDefault(); // Ekranın kaymasını engelle
-            
-            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             
-            let canvasX = (clientX - rect.left) * scaleX;
-            let canvasY = (clientY - rect.top) * scaleY;
+            // PointerEvents doğrudan clientX ve clientY'yi sorunsuz verir (hem parmak hem fare)
+            let canvasX = (e.clientX - rect.left) * scaleX;
+            let canvasY = (e.clientY - rect.top) * scaleY;
 
-            // Oyuncu kendi sahasından (orta çizgi) yukarı çıkamaz
-            dragTarget.x = Math.max(player.radius, Math.min(canvas.width - player.radius, canvasX));
-            dragTarget.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, canvasY));
+            // Sınırlandırmalar (Sadece kendi sahanda hareket et)
+            dragTarget.x = Math.max(22, Math.min(canvas.width - 22, canvasX)); // 22 is player.radius
+            dragTarget.y = Math.max(canvas.height / 2 + 22, Math.min(canvas.height - 22, canvasY));
         }
 
-        // Dokunmatik (Mobil) Olayları
-        canvas.addEventListener("touchstart", (e) => { isDragging = true; updateDragTarget(e); }, { passive: false });
-        canvas.addEventListener("touchmove", (e) => { if (isDragging) updateDragTarget(e); }, { passive: false });
-        canvas.addEventListener("touchend", (e) => { e.preventDefault(); isDragging = false; });
-        canvas.addEventListener("touchcancel", (e) => { e.preventDefault(); isDragging = false; });
+        // PointerDown: Dokunma veya tıklama anı
+        canvas.addEventListener("pointerdown", (e) => { 
+            if (gameState !== "playing") return;
+            isDragging = true; 
+            canvas.setPointerCapture(e.pointerId); // Parmağın dışarı kaysa bile takip etmeye devam eder
+            updateDragTarget(e); 
+        });
 
-        // Fare (Masaüstü) Sürükleme Olayları
-        canvas.addEventListener("mousedown", (e) => { isDragging = true; updateDragTarget(e); });
-        canvas.addEventListener("mousemove", (e) => { if (isDragging) updateDragTarget(e); });
-        window.addEventListener("mouseup", () => { isDragging = false; });
+        // PointerMove: Parmağı veya fareyi sürükleme
+        canvas.addEventListener("pointermove", (e) => { 
+            if (isDragging) updateDragTarget(e); 
+        });
+
+        // PointerUp & Cancel: Bırakma anı
+        canvas.addEventListener("pointerup", (e) => { 
+            isDragging = false; 
+            canvas.releasePointerCapture(e.pointerId);
+        });
+
+        canvas.addEventListener("pointercancel", (e) => { 
+            isDragging = false; 
+        });
 
         // --- OYUN NESNELERİ ---
         const puck = {
@@ -406,8 +412,10 @@
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
             puck.vx = 0; puck.vy = scorer === 'player' ? -5 : 5; 
             puck.trail = []; 
+            
             player.x = canvas.width / 2; player.y = canvas.height - 50;
-            dragTarget = { x: player.x, y: player.y }; // Sürükleme hedefini sıfırla
+            dragTarget = { x: player.x, y: player.y }; 
+            
             ai.x = canvas.width / 2; ai.y = 50;
             cornerTimer = 0; aiRetreating = false;
         }
@@ -456,10 +464,8 @@
         function update() {
             // 1. Oyuncu Hareketi (Sürükleme ve Klavye Karma Modu)
             if (isDragging) {
-                // Sürükleme hızı pürüzsüz bir lerp (linear interpolation) ile verilir
                 let dx = dragTarget.x - player.x;
                 let dy = dragTarget.y - player.y;
-                
                 player.vx = dx * 0.4;
                 player.vy = dy * 0.4;
             } else {
