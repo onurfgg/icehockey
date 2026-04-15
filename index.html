@@ -91,10 +91,13 @@
         
         .setting-group { margin-bottom: 20px; text-align: left; }
         .setting-group label { display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 8px; color: #cbd5e1; font-weight: bold;}
-        .setting-group select { 
+        .setting-group select, .setting-group input { 
             width: 100%; padding: 12px; border-radius: 8px; border: none; 
-            background: rgba(255,255,255,0.9); font-weight: bold; cursor: pointer; outline: none; font-size: 14px;
+            background: rgba(255,255,255,0.9); font-weight: bold; outline: none; font-size: 14px;
+            box-sizing: border-box;
         }
+        .setting-group input { cursor: text; }
+        .setting-group select { cursor: pointer; }
 
         .btn-start {
             background: var(--player-color); color: white; border: none;
@@ -131,6 +134,10 @@
         <div class="menu-box">
             <h2>NEON AIR HOCKEY</h2>
             <div class="setting-group">
+                <label>Oyuncu Adı</label>
+                <input type="text" id="player-name-input" placeholder="Adınız (İsteğe bağlı)" maxlength="12">
+            </div>
+            <div class="setting-group">
                 <label>Zorluk Seviyesi</label>
                 <select id="difficulty-select">
                     <option value="3">Çırak (Kolay)</option>
@@ -165,7 +172,7 @@
         </div>
         <div class="score-box" style="color: rgba(255,255,255,0.2);">|</div>
         <div class="score-box">
-            <span class="score-label">Oyuncu</span>
+            <span class="score-label" id="player-name-display">Oyuncu</span>
             <span id="player-score">0</span>
         </div>
     </div>
@@ -181,8 +188,9 @@
         let gameState = "menu"; 
         let targetScore = 5;
         let goalMessage = "";
+        let playerName = "Oyuncu"; // Varsayılan isim
 
-        // Kamera Sarsıntısı (Screen Shake) ve Efekt Değişkenleri
+        // Kamera Sarsıntısı ve Efekt Değişkenleri (Kısılmış)
         let screenShake = 0;
         let sparks = [];
 
@@ -195,7 +203,7 @@
             x: canvas.width / 2, y: canvas.height / 2,
             radius: 12, mass: 1, vx: 0, vy: 0,
             color: "#1e293b",
-            maxSpeed: 28, // Oyun hızlandırıldı
+            maxSpeed: 23, // Hız hafif düşürüldü, daha kontrol edilebilir
             friction: 0.985, 
             trail: [] 
         };
@@ -219,6 +227,9 @@
 
         window.addEventListener("keydown", (e) => {
             let key = e.key.toLowerCase();
+            // Input alanına yazı yazarken ok tuşlarının karakteri hareket ettirmemesi için
+            if (document.activeElement === document.getElementById('player-name-input')) return;
+
             if (key === "w" || e.key === "ArrowUp") { keys.up = true; e.preventDefault(); }
             if (key === "s" || e.key === "ArrowDown") { keys.down = true; e.preventDefault(); }
             if (key === "a" || e.key === "ArrowLeft") { keys.left = true; e.preventDefault(); }
@@ -235,6 +246,11 @@
 
         // --- MENÜ ---
         document.getElementById('start-btn').addEventListener('click', () => {
+            // İsim alma ve kontrolü
+            let inputVal = document.getElementById('player-name-input').value.trim();
+            playerName = inputVal === "" ? "Oyuncu" : inputVal;
+            document.getElementById('player-name-display').innerText = playerName;
+
             ai.speed = parseFloat(document.getElementById('difficulty-select').value);
             targetScore = parseInt(document.getElementById('target-score-select').value);
             startGame();
@@ -256,13 +272,14 @@
             gameState = "playing";
         }
 
-        // --- GÖRSEL EFEKTLER VE ÇİZİM ---
+        // --- GÖRSEL EFEKTLER (Daha zarif) ---
         function createSparks(x, y, color) {
-            for(let i=0; i<8; i++) {
+            // Kıvılcım sayısı ve sıçrama mesafesi azaltıldı
+            for(let i=0; i<4; i++) {
                 sparks.push({
                     x: x, y: y,
-                    vx: (Math.random() - 0.5) * 8,
-                    vy: (Math.random() - 0.5) * 8,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
                     alpha: 1,
                     color: color
                 });
@@ -272,10 +289,10 @@
         function drawSparks() {
             for(let i=sparks.length-1; i>=0; i--) {
                 let s = sparks[i];
-                ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, Math.PI*2);
+                ctx.beginPath(); ctx.arc(s.x, s.y, 2.5, 0, Math.PI*2);
                 ctx.fillStyle = s.color; ctx.globalAlpha = s.alpha;
                 ctx.fill();
-                s.x += s.vx; s.y += s.vy; s.alpha -= 0.05;
+                s.x += s.vx; s.y += s.vy; s.alpha -= 0.08;
                 if(s.alpha <= 0) sparks.splice(i, 1);
             }
             ctx.globalAlpha = 1.0;
@@ -307,13 +324,13 @@
                 let alpha = i / puck.trail.length;
                 ctx.beginPath();
                 ctx.arc(puck.trail[i].x, puck.trail[i].y, puck.radius * alpha * 0.8, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(30, 41, 59, ${alpha * 0.4})`;
+                ctx.fillStyle = `rgba(30, 41, 59, ${alpha * 0.3})`;
                 ctx.fill();
             }
         }
 
         function drawCircle(obj, isPuck = false) {
-            ctx.shadowBlur = 15;
+            ctx.shadowBlur = 10; // Işıklandırma yumuşatıldı
             ctx.shadowColor = obj.color;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
             ctx.fillStyle = obj.color; ctx.fill();
@@ -342,7 +359,7 @@
                 p.y = Math.max(p.radius, Math.min(canvas.height - p.radius, p.y));
                 
                 let forceRatio = 0.85; 
-                let bounceBoost = 7; 
+                let bounceBoost = 4; // Fırlatma etkisi azaltıldı (daha kontrollü)
                 
                 p.vx += obj.vx * forceRatio + (cos * bounceBoost);
                 p.vy += obj.vy * forceRatio + (sin * bounceBoost);
@@ -352,9 +369,9 @@
                     p.vx = (p.vx / currentSpeed) * p.maxSpeed; p.vy = (p.vy / currentSpeed) * p.maxSpeed;
                 }
 
-                // Vuruş Hissiyatı: Ekranı titret ve kıvılcım saç
-                if(currentSpeed > 10) {
-                    screenShake = 5;
+                // Efekt tetikleyicisi daha düşük seviyelere çekildi
+                if(currentSpeed > 12) {
+                    screenShake = 2; // Sarsıntı azaltıldı
                     createSparks(p.x - cos*p.radius, p.y - sin*p.radius, obj.color);
                 }
             }
@@ -372,12 +389,12 @@
 
         function handleGoal(scorer) {
             gameState = "scored";
-            screenShake = 15; // Gol olunca şiddetli sarsıntı
+            screenShake = 6; // Gol sarsıntısı azaltıldı
             
             if (scorer === 'player') {
                 player.score++;
                 document.getElementById("player-score").innerText = player.score;
-                goalMessage = "GOL! (SEN)";
+                goalMessage = `GOL! (${playerName.toUpperCase()})`;
             } else {
                 ai.score++;
                 document.getElementById("ai-score").innerText = ai.score;
@@ -391,7 +408,6 @@
                     const title = document.getElementById('game-over-title');
                     const restartBtn = document.getElementById('restart-btn');
                     
-                    // İstenen Metin Güncellemesi
                     if (player.score >= targetScore) {
                         title.innerText = "ŞAMPİYON! 🏆";
                         title.style.color = "var(--player-color)";
@@ -402,7 +418,7 @@
                         restartBtn.innerText = "Rövanş İste";
                     }
                     
-                    document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${ai.score} A.I. Model`;
+                    document.getElementById('final-score-text').innerText = `${playerName} ${player.score} - ${ai.score} A.I. Model`;
                 }, 1000);
             } else {
                 setTimeout(() => {
@@ -423,18 +439,17 @@
             player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
             player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
 
-            // A.I. KÖŞE SIKIŞMASI ÇÖZÜMÜ
             let inCorner = puck.y < 80 && (puck.x < 80 || puck.x > canvas.width - 80);
 
             if (inCorner) {
                 cornerTimer += 16.6; 
-                if (cornerTimer >= 2000) aiRetreating = true; // 2 Sn kuralı
+                if (cornerTimer >= 2000) aiRetreating = true; 
             } else {
                 cornerTimer = 0; 
             }
 
             if (aiRetreating) {
-                let targetX = canvas.width / 2; let targetY = 180; // Sahanın oldukça gerisine çekil
+                let targetX = canvas.width / 2; let targetY = 180; 
                 
                 if (ai.x < targetX - 5) ai.vx = ai.speed; else if (ai.x > targetX + 5) ai.vx = -ai.speed; else ai.vx = 0;
                 if (ai.y < targetY - 5) ai.vy = ai.speed; else if (ai.y > targetY + 5) ai.vy = -ai.speed; else ai.vy = 0;
@@ -458,31 +473,30 @@
             ai.y = Math.max(ai.radius, Math.min(canvas.height / 2 - ai.radius, ai.y));
 
             puck.trail.push({x: puck.x, y: puck.y});
-            if(puck.trail.length > 15) puck.trail.shift(); 
+            if(puck.trail.length > 10) puck.trail.shift(); // İz daha kısa tutuldu
 
             puck.vx *= puck.friction; puck.vy *= puck.friction;
             puck.x += puck.vx; puck.y += puck.vy;
 
-            // Duvar Sekmeleri (Şiddetliyse ekranı sars)
             if (puck.x - puck.radius < 0) { 
                 puck.x = puck.radius; puck.vx *= -1; 
-                if(Math.abs(puck.vx) > 12) screenShake = 3;
+                if(Math.abs(puck.vx) > 12) screenShake = 1;
             }
             if (puck.x + puck.radius > canvas.width) { 
                 puck.x = canvas.width - puck.radius; puck.vx *= -1; 
-                if(Math.abs(puck.vx) > 12) screenShake = 3;
+                if(Math.abs(puck.vx) > 12) screenShake = 1;
             }
 
             const isInsideGoalWidth = puck.x > (canvas.width - goalWidth) / 2 && puck.x < (canvas.width + goalWidth) / 2;
 
             if (puck.y - puck.radius < 0) {
                 if (isInsideGoalWidth) handleGoal('player');
-                else { puck.y = puck.radius; puck.vy *= -1; if(Math.abs(puck.vy) > 12) screenShake = 3; }
+                else { puck.y = puck.radius; puck.vy *= -1; if(Math.abs(puck.vy) > 12) screenShake = 1; }
             }
 
             if (puck.y + puck.radius > canvas.height) {
                 if (isInsideGoalWidth) handleGoal('ai');
-                else { puck.y = canvas.height - puck.radius; puck.vy *= -1; if(Math.abs(puck.vy) > 12) screenShake = 3; }
+                else { puck.y = canvas.height - puck.radius; puck.vy *= -1; if(Math.abs(puck.vy) > 12) screenShake = 1; }
             }
 
             checkCollision(player, puck); checkCollision(ai, puck);
@@ -492,11 +506,10 @@
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Screen Shake Uygulaması
             ctx.save();
             if(screenShake > 0) {
-                let dx = (Math.random() - 0.5) * 8;
-                let dy = (Math.random() - 0.5) * 8;
+                let dx = (Math.random() - 0.5) * 4; // Sarsıntı şiddeti düşürüldü
+                let dy = (Math.random() - 0.5) * 4;
                 ctx.translate(dx, dy);
                 screenShake--;
             }
@@ -508,7 +521,7 @@
             drawCircle(ai);
             drawCircle(puck, true);
 
-            ctx.restore(); // Sarsıntıyı sadece çizimlere uygula, arayüzü bozma
+            ctx.restore(); 
 
             if (gameState === "playing") {
                 update();
