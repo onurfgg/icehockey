@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buz Hokeyi 2D | Canvas HTML5</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --ice-color: #e0f2fe;
+            --line-color: #94a3b8;
+            --player-color: #3b82f6;
+            --ai-color: #ef4444;
+            --puck-color: #1e293b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        /* Modern Skor Tablosu */
+        .scoreboard {
+            position: absolute;
+            top: 20px;
+            display: flex;
+            gap: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 28px;
+            font-weight: 800;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .score-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        #player-score { color: var(--player-color); }
+        #ai-score { color: var(--ai-color); }
+
+        /* Oyun Alanı (Canvas) Stili */
+        #gameCanvas {
+            background-color: var(--ice-color);
+            border-radius: 15px;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255,255,255,0.8);
+            border: 8px solid #cbd5e1;
+        }
+
+        .controls-info {
+            position: absolute;
+            bottom: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        /* --- YENİ: MENÜ VE OVERLAY STİLLERİ --- */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            color: white;
+            transition: 0.3s;
+        }
+
+        .overlay.hidden {
+            display: none !important;
+        }
+
+        .menu-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            width: 300px;
+        }
+
+        .menu-box h2 { margin-top: 0; margin-bottom: 25px; font-size: 24px; }
+        
+        .setting-group { margin-bottom: 20px; text-align: left; }
+        .setting-group label { display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; color: #cbd5e1; font-weight: bold;}
+        .setting-group select { 
+            width: 100%; padding: 10px; border-radius: 8px; border: none; 
+            background: rgba(255,255,255,0.9); font-weight: bold; cursor: pointer; outline: none;
+        }
+
+        .btn-start {
+            background: var(--player-color); color: white; border: none;
+            padding: 12px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: 0.2s; margin-top: 10px;
+        }
+        .btn-start:hover { background: #2563eb; transform: translateY(-2px); }
+
+        #game-over-title { font-size: 36px; margin-bottom: 10px; }
+        #final-score-text { font-size: 18px; color: #94a3b8; margin-bottom: 30px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-menu" class="overlay">
+        <div class="menu-box">
+            <h2>Buz Hokeyi</h2>
+            <div class="setting-group">
+                <label>Zorluk Seviyesi</label>
+                <select id="difficulty-select">
+                    <option value="2.5">Kolay</option>
+                    <option value="4" selected>Orta</option>
+                    <option value="6">Zor</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Hedef Skor (Bitiş)</label>
+                <select id="target-score-select">
+                    <option value="3">3 Gol</option>
+                    <option value="5" selected>5 Gol</option>
+                    <option value="7">7 Gol</option>
+                </select>
+            </div>
+            <button class="btn-start" id="start-btn">Oyuna Başla</button>
+        </div>
+    </div>
+
+    <div id="game-over-menu" class="overlay hidden">
+        <div class="menu-box">
+            <h2 id="game-over-title">KAZANDIN!</h2>
+            <div id="final-score-text">Sen 5 - 3 AI</div>
+            <button class="btn-start" id="restart-btn">Tekrar Oyna</button>
+        </div>
+    </div>
+
+    <div class="scoreboard">
+        <div class="score-box">
+            <span class="score-label">Yapay Zeka</span>
+            <span id="ai-score">0</span>
+        </div>
+        <div class="score-box" style="color: rgba(255,255,255,0.3);">|</div>
+        <div class="score-box">
+            <span class="score-label">Sen</span>
+            <span id="player-score">0</span>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <div class="controls-info">Kontrol: Klavyedeki OK TUŞLARINI (⬅️ ⬆️ ⬇️ ➡️) kullanın</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // OYUN DURUMU (State Machine)
+        let gameState = "menu"; // menu, playing, scored, gameover
+        let targetScore = 5;
+        let goalMessage = "";
+
+        // --- OYUN NESNELERİ ---
+        const puck = {
+            x: canvas.width / 2, y: canvas.height / 2,
+            radius: 12, mass: 1, vx: 0, vy: 0,
+            color: "#1e293b",
+            maxSpeed: 22, // Hız limiti artırıldı (daha dinamik)
+            friction: 0.99
+        };
+
+        const player = {
+            x: canvas.width / 2, y: canvas.height - 50,
+            radius: 20, mass: 5, vx: 0, vy: 0,
+            speed: 6.5, color: "#3b82f6", score: 0
+        };
+
+        const ai = {
+            x: canvas.width / 2, y: 50,
+            radius: 20, mass: 5, vx: 0, vy: 0,
+            speed: 4, color: "#ef4444", score: 0
+        };
+
+        const goalWidth = 120;
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+        window.addEventListener("keydown", (e) => {
+            if (keys.hasOwnProperty(e.key)) { keys[e.key] = true; e.preventDefault(); }
+        });
+        window.addEventListener("keyup", (e) => {
+            if (keys.hasOwnProperty(e.key)) { keys[e.key] = false; }
+        });
+
+        // --- MENÜ KONTROLLERİ ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            ai.speed = parseFloat(document.getElementById('difficulty-select').value);
+            targetScore = parseInt(document.getElementById('target-score-select').value);
+            startGame();
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            document.getElementById('game-over-menu').classList.add('hidden');
+            document.getElementById('start-menu').classList.remove('hidden');
+        });
+
+        function startGame() {
+            player.score = 0; ai.score = 0;
+            document.getElementById("player-score").innerText = player.score;
+            document.getElementById("ai-score").innerText = ai.score;
+            document.getElementById('start-menu').classList.add('hidden');
+            resetPuck('player');
+            gameState = "playing";
+        }
+
+        // --- ÇİZİM FONKSİYONLARI ---
+        function drawSaha() {
+            ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2);
+            ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 4; ctx.stroke();
+
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 5, 0, Math.PI * 2); ctx.fillStyle = "#ef4444"; ctx.fill();
+
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 10); ctx.fillStyle = "#ef4444"; ctx.fill();
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 10, goalWidth, 10); ctx.fillStyle = "#3b82f6"; ctx.fill();
+        }
+
+        function drawCircle(obj, isPuck = false) {
+            ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+            ctx.fillStyle = obj.color; ctx.fill();
+            if (!isPuck) {
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.5, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fill();
+            }
+        }
+
+        // --- FİZİK VE ÇARPIŞMA ---
+        function checkCollision(circle1, circle2) {
+            let dx = circle2.x - circle1.x;
+            let dy = circle2.y - circle1.y;
+            let distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < circle1.radius + circle2.radius) {
+                let angle = Math.atan2(dy, dx);
+                let sin = Math.sin(angle);
+                let cos = Math.cos(angle);
+
+                let overlap = circle1.radius + circle2.radius - distance;
+                if(circle2 === puck) {
+                    puck.x += cos * overlap;
+                    puck.y += sin * overlap;
+                    
+                    // YENİ: Topa Vurunca Hızlandırma (Bounce Boost)
+                    let forceRatio = 0.8; 
+                    let bounceBoost = 4; // Vuruş şiddetine eklenen sabit ivme
+                    
+                    puck.vx += circle1.vx * forceRatio + (cos * bounceBoost);
+                    puck.vy += circle1.vy * forceRatio + (sin * bounceBoost);
+
+                    // Hız limitini kontrol et
+                    let currentSpeed = Math.sqrt(puck.vx**2 + puck.vy**2);
+                    if(currentSpeed > puck.maxSpeed) {
+                        puck.vx = (puck.vx / currentSpeed) * puck.maxSpeed;
+                        puck.vy = (puck.vy / currentSpeed) * puck.maxSpeed;
+                    }
+                }
+            }
+        }
+
+        // --- OYUN MANTIĞI ---
+        function resetPuck(scorer) {
+            puck.x = canvas.width / 2; puck.y = canvas.height / 2;
+            puck.vx = 0; puck.vy = scorer === 'player' ? -3 : 3; 
+            player.x = canvas.width / 2; player.y = canvas.height - 50;
+            ai.x = canvas.width / 2; ai.y = 50;
+        }
+
+        function handleGoal(scorer) {
+            gameState = "scored";
+            if (scorer === 'player') {
+                player.score++;
+                document.getElementById("player-score").innerText = player.score;
+                goalMessage = "GOL! (SEN)";
+            } else {
+                ai.score++;
+                document.getElementById("ai-score").innerText = ai.score;
+                goalMessage = "GOL! (YAPAY ZEKA)";
+            }
+
+            // Oyun Bitiş Kontrolü
+            if (player.score >= targetScore || ai.score >= targetScore) {
+                setTimeout(() => {
+                    gameState = "gameover";
+                    document.getElementById('game-over-menu').classList.remove('hidden');
+                    const title = document.getElementById('game-over-title');
+                    title.innerText = player.score >= targetScore ? "KAZANDIN! 🎉" : "KAYBETTİN! 💻";
+                    title.style.color = player.score >= targetScore ? "var(--player-color)" : "var(--ai-color)";
+                    document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${ai.score} Yapay Zeka`;
+                }, 1000);
+            } else {
+                // 1.5 Saniye sonra oyuna devam
+                setTimeout(() => {
+                    resetPuck(scorer === 'player' ? 'ai' : 'player');
+                    gameState = "playing";
+                }, 1500);
+            }
+        }
+
+        function update() {
+            // 1. Oyuncu Hareketi
+            player.vx = 0; player.vy = 0;
+            if (keys.ArrowLeft) player.vx = -player.speed;
+            if (keys.ArrowRight) player.vx = player.speed;
+            if (keys.ArrowUp) player.vy = -player.speed;
+            if (keys.ArrowDown) player.vy = player.speed;
+
+            player.x += player.vx; player.y += player.vy;
+            player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+            player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
+
+            // 2. Yapay Zeka Hareketi
+            let aiTargetX = puck.x;
+            if (puck.y < canvas.height / 2) {
+                if (ai.x < aiTargetX - 10) ai.vx = ai.speed;
+                else if (ai.x > aiTargetX + 10) ai.vx = -ai.speed;
+                else ai.vx = 0;
+                
+                if (ai.y < puck.y - 10) ai.vy = ai.speed;
+                else if (ai.y > puck.y + 10) ai.vy = -ai.speed;
+                else ai.vy = 0;
+            } else {
+                if (ai.x < canvas.width / 2 - 10) ai.vx = ai.speed * 0.5;
+                else if (ai.x > canvas.width / 2 + 10) ai.vx = -ai.speed * 0.5;
+                else ai.vx = 0;
+                if (ai.y > 50) ai.vy = -ai.speed * 0.5; else ai.vy = 0;
+            }
+
+            ai.x += ai.vx; ai.y += ai.vy;
+
+            // YENİ: AI Köşe Sıkışma Koruması (Anti-Trap)
+            // AI artık duvarlara tamamen yapışamaz, böylece disk arkasından sekecek boşluk bulur.
+            const aiMargin = 15; 
+            ai.x = Math.max(ai.radius + aiMargin, Math.min(canvas.width - ai.radius - aiMargin, ai.x));
+            ai.y = Math.max(ai.radius + aiMargin, Math.min(canvas.height / 2 - ai.radius, ai.y));
+
+            // 3. Disk Fiziği
+            puck.vx *= puck.friction; puck.vy *= puck.friction;
+            puck.x += puck.vx; puck.y += puck.vy;
+
+            if (puck.x - puck.radius < 0) { puck.x = puck.radius; puck.vx *= -1; }
+            if (puck.x + puck.radius > canvas.width) { puck.x = canvas.width - puck.radius; puck.vx *= -1; }
+
+            const isInsideGoalWidth = puck.x > (canvas.width - goalWidth) / 2 && puck.x < (canvas.width + goalWidth) / 2;
+
+            if (puck.y - puck.radius < 0) {
+                if (isInsideGoalWidth) handleGoal('player');
+                else { puck.y = puck.radius; puck.vy *= -1; }
+            }
+
+            if (puck.y + puck.radius > canvas.height) {
+                if (isInsideGoalWidth) handleGoal('ai');
+                else { puck.y = canvas.height - puck.radius; puck.vy *= -1; }
+            }
+
+            checkCollision(player, puck); checkCollision(ai, puck);
+        }
+
+        // --- ANA DÖNGÜ ---
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawSaha();
+            drawCircle(player);
+            drawCircle(ai);
+            drawCircle(puck, true);
+
+            if (gameState === "playing") {
+                update();
+            } else if (gameState === "scored") {
+                // YENİ: Gol Olduğunda Ekrana Yarı Saydam Siyah Perde ve GOL Yazısı
+                ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "900 48px 'Segoe UI'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(goalMessage, canvas.width / 2, canvas.height / 2 - 20);
+                
+                ctx.font = "bold 24px 'Segoe UI'";
+                ctx.fillText(`Skor: ${player.score} - ${ai.score}`, canvas.width / 2, canvas.height / 2 + 30);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Çizimleri başlat ama update'i menü geçene kadar beklet
+        gameLoop();
+
+    </script>
+</body>
+</html>
