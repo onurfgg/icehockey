@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buz Hokeyi 2D | Neon Air Hockey</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --bg-color: #0f172a;
@@ -20,6 +21,25 @@
             height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif;
             overflow: hidden; flex-direction: column;
         }
+
+        /* --- YENİ: SOSYAL MEDYA BUTONLARI --- */
+        .social-container {
+            position: absolute; top: 20px; left: 20px; z-index: 15;
+            display: flex; gap: 10px;
+        }
+
+        .social-btn {
+            color: white; text-decoration: none;
+            padding: 10px 15px; border-radius: 8px; font-weight: bold; font-size: 14px;
+            display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: 0.3s;
+        }
+        
+        .btn-linkedin { background: #0077b5; }
+        .btn-linkedin:hover { background: #005885; transform: translateY(-2px); }
+        
+        .btn-github { background: #24292e; }
+        .btn-github:hover { background: #1b1f23; transform: translateY(-2px); }
 
         .scoreboard {
             position: absolute; top: 20px;
@@ -87,14 +107,29 @@
         #game-over-title { font-size: 38px; margin-bottom: 10px; font-weight: 900; }
         #final-score-text { font-size: 18px; color: #94a3b8; margin-bottom: 30px; font-weight: bold;}
 
-        /* Mobilde Scoreboard'u Sığdır */
-        @media screen and (max-width: 500px) {
-            .scoreboard { padding: 10px 20px; gap: 20px; font-size: 20px; }
-            #gameCanvas { width: 95vw; height: auto; aspect-ratio: 4/6; }
+        /* Mobilde Scoreboard'u ve Butonları Sığdır */
+        @media screen and (max-width: 768px) {
+            .social-container {
+                top: 10px; left: 5vw; width: 90vw; justify-content: space-between; gap: 8px;
+            }
+            .social-btn {
+                font-size: 11px; padding: 8px 5px; flex: 1; justify-content: center;
+            }
+            .scoreboard { padding: 10px 20px; gap: 20px; font-size: 20px; top: 60px; }
+            #gameCanvas { width: 95vw; height: auto; aspect-ratio: 4/6; margin-top: 30px;}
         }
     </style>
 </head>
 <body>
+
+    <div class="social-container">
+        <a href="https://linkedin.com/in/onurfurkan" target="_blank" class="social-btn btn-linkedin">
+            <i class="fab fa-linkedin"></i> Onur Furkan Gök
+        </a>
+        <a href="https://github.com/onurfgg" target="_blank" class="social-btn btn-github">
+            <i class="fab fa-github"></i> Onur Furkan Gök
+        </a>
+    </div>
 
     <div id="start-menu" class="overlay">
         <div class="menu-box">
@@ -151,14 +186,18 @@
         let targetScore = 5;
         let goalMessage = "";
 
+        // YENİ: A.I. Köşe Sıkışması Çözümü İçin Değişkenler
+        let cornerTimer = 0;
+        let aiRetreating = false;
+
         // --- OYUN NESNELERİ VE FİZİK ---
         const puck = {
             x: canvas.width / 2, y: canvas.height / 2,
             radius: 12, mass: 1, vx: 0, vy: 0,
             color: "#1e293b",
-            maxSpeed: 25, // Çok daha hızlı ve dinamik
-            friction: 0.985, // Hafifçe daha fazla buz kayganlığı
-            trail: [] // YENİ: Görsel iz efekti için hafıza
+            maxSpeed: 25, 
+            friction: 0.985, 
+            trail: [] 
         };
 
         const player = {
@@ -173,7 +212,7 @@
             speed: 4.5, color: "#ef4444", score: 0
         };
 
-        const goalWidth = 130; // Gol atması biraz daha rahatlatıldı
+        const goalWidth = 130; 
 
         // --- WASD VE OK TUŞLARI KONTROLÜ ---
         const keys = { up: false, down: false, left: false, right: false };
@@ -208,6 +247,7 @@
 
         function startGame() {
             player.score = 0; ai.score = 0;
+            cornerTimer = 0; aiRetreating = false; // Sıfırla
             document.getElementById("player-score").innerText = player.score;
             document.getElementById("ai-score").innerText = ai.score;
             document.getElementById('start-menu').classList.add('hidden');
@@ -215,29 +255,25 @@
             gameState = "playing";
         }
 
-        // --- ÇİZİM FONKSİYONLARI (GELİŞMİŞ SAHA VE EFEKTLER) ---
+        // --- ÇİZİM FONKSİYONLARI ---
         function drawSaha() {
-            ctx.shadowBlur = 0; // Sahada gölge yok
+            ctx.shadowBlur = 0; 
             
-            // Kale alanları (Yarım daireler)
             ctx.beginPath(); ctx.arc(canvas.width / 2, 0, 80, 0, Math.PI); 
             ctx.strokeStyle = "rgba(239, 68, 68, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
             
             ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height, 80, Math.PI, Math.PI * 2); 
             ctx.strokeStyle = "rgba(59, 130, 246, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
 
-            // Orta Çizgi ve Daire
             ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2);
             ctx.strokeStyle = "rgba(148, 163, 184, 0.5)"; ctx.lineWidth = 4; ctx.stroke();
 
             ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(148, 163, 184, 0.5)"; ctx.fill();
 
-            // AI Kalesi
             ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 12); 
             ctx.fillStyle = "rgba(239, 68, 68, 0.8)"; ctx.fill();
 
-            // Oyuncu Kalesi
             ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 12, goalWidth, 12); 
             ctx.fillStyle = "rgba(59, 130, 246, 0.8)"; ctx.fill();
         }
@@ -253,7 +289,6 @@
         }
 
         function drawCircle(obj, isPuck = false) {
-            // Neon Glow Efekti
             ctx.shadowBlur = 15;
             ctx.shadowColor = obj.color;
             
@@ -262,10 +297,9 @@
             ctx.fillStyle = obj.color; 
             ctx.fill();
             
-            ctx.shadowBlur = 0; // İç detaylarda gölgeyi kapat
+            ctx.shadowBlur = 0; 
 
             if (!isPuck) {
-                // Tokmak kulpu detayı
                 ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.4, 0, Math.PI * 2);
                 ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fill();
                 ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.2, 0, Math.PI * 2);
@@ -286,17 +320,14 @@
 
                 let overlap = obj.radius + p.radius - distance;
                 
-                // 1. ADIM: İÇ İÇE GEÇMEYİ ANINDA ÇÖZ (Sıkışmayı engeller)
                 p.x += cos * overlap;
                 p.y += sin * overlap;
 
-                // 2. ADIM: ZORUNLU SINIRLANDIRMA (Duvarın içine itilmeyi tamamen yasaklar)
                 p.x = Math.max(p.radius, Math.min(canvas.width - p.radius, p.x));
                 p.y = Math.max(p.radius, Math.min(canvas.height - p.radius, p.y));
                 
-                // 3. ADIM: GÜÇ AKTARIMI (Hızlı Vuruş Dinamiği)
                 let forceRatio = 0.8; 
-                let bounceBoost = 6; // Vurulduğunda eklenen patlama ivmesi
+                let bounceBoost = 6; 
                 
                 p.vx += obj.vx * forceRatio + (cos * bounceBoost);
                 p.vy += obj.vy * forceRatio + (sin * bounceBoost);
@@ -313,9 +344,10 @@
         function resetPuck(scorer) {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
             puck.vx = 0; puck.vy = scorer === 'player' ? -4 : 4; 
-            puck.trail = []; // Kuyruğu temizle
+            puck.trail = []; 
             player.x = canvas.width / 2; player.y = canvas.height - 50;
             ai.x = canvas.width / 2; ai.y = 50;
+            cornerTimer = 0; aiRetreating = false;
         }
 
         function handleGoal(scorer) {
@@ -327,7 +359,7 @@
             } else {
                 ai.score++;
                 document.getElementById("ai-score").innerText = ai.score;
-                goalMessage = "GOL! (A.I.)"; // Ekrana sığacak kısa ve net metin
+                goalMessage = "GOL! (A.I.)"; 
             }
 
             if (player.score >= targetScore || ai.score >= targetScore) {
@@ -359,27 +391,54 @@
             player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
             player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
 
-            // 2. Yapay Zeka Hareketi
-            let aiTargetX = puck.x;
-            if (puck.y < canvas.height / 2) {
-                if (ai.x < aiTargetX - 10) ai.vx = ai.speed;
-                else if (ai.x > aiTargetX + 10) ai.vx = -ai.speed;
-                else ai.vx = 0;
-                
-                if (ai.y < puck.y - 15) ai.vy = ai.speed;
-                else if (ai.y > puck.y + 15) ai.vy = -ai.speed;
-                else ai.vy = 0;
+            // YENİ: A.I. KÖŞE SIKIŞMASI (TRAP) ÇÖZÜMÜ
+            // Top yapay zeka sahasında ve köşelerde mi?
+            let inCorner = puck.y < 80 && (puck.x < 80 || puck.x > canvas.width - 80);
+
+            if (inCorner) {
+                cornerTimer += 16.6; // ~60fps'de milisaniye sayacı
+                if (cornerTimer >= 2000) { // 2 Saniye geçtiyse
+                    aiRetreating = true;
+                }
             } else {
-                if (ai.x < canvas.width / 2 - 10) ai.vx = ai.speed * 0.5;
-                else if (ai.x > canvas.width / 2 + 10) ai.vx = -ai.speed * 0.5;
-                else ai.vx = 0;
-                if (ai.y > 60) ai.vy = -ai.speed * 0.5; else ai.vy = 0;
+                cornerTimer = 0; // Top köşeden çıktıysa sayacı sıfırla
             }
 
-            // ANTI-TRAP SİSTEMİ: AI topu köşede ezip kitleyemez!
-            let inCorner = (puck.x < 40 || puck.x > canvas.width - 40) && puck.y < 40;
-            if (inCorner && ai.y < 50) {
-                ai.vy = ai.speed; // AI'yı zorla aşağı iterek topa çıkma payı bırak
+            if (aiRetreating) {
+                // Sıkışmayı çözmek için A.I. geri çekilip "Şut" pozisyonu alıyor
+                let targetX = canvas.width / 2;
+                let targetY = 150; // Sahanın gerisine çekil
+                
+                if (ai.x < targetX - 5) ai.vx = ai.speed;
+                else if (ai.x > targetX + 5) ai.vx = -ai.speed;
+                else ai.vx = 0;
+
+                if (ai.y < targetY - 5) ai.vy = ai.speed;
+                else if (ai.y > targetY + 5) ai.vy = -ai.speed;
+                else ai.vy = 0;
+
+                // Geri çekilme noktasına ulaştıysa tekrar saldırıya geç!
+                if (Math.abs(ai.x - targetX) <= 10 && Math.abs(ai.y - targetY) <= 10) {
+                    aiRetreating = false;
+                    cornerTimer = 0; 
+                }
+            } else {
+                // 2. Normal Yapay Zeka Hareketi
+                let aiTargetX = puck.x;
+                if (puck.y < canvas.height / 2) {
+                    if (ai.x < aiTargetX - 10) ai.vx = ai.speed;
+                    else if (ai.x > aiTargetX + 10) ai.vx = -ai.speed;
+                    else ai.vx = 0;
+                    
+                    if (ai.y < puck.y - 15) ai.vy = ai.speed;
+                    else if (ai.y > puck.y + 15) ai.vy = -ai.speed;
+                    else ai.vy = 0;
+                } else {
+                    if (ai.x < canvas.width / 2 - 10) ai.vx = ai.speed * 0.5;
+                    else if (ai.x > canvas.width / 2 + 10) ai.vx = -ai.speed * 0.5;
+                    else ai.vx = 0;
+                    if (ai.y > 60) ai.vy = -ai.speed * 0.5; else ai.vy = 0;
+                }
             }
 
             ai.x += ai.vx; ai.y += ai.vy;
@@ -388,12 +447,11 @@
 
             // 3. Disk Fiziği & Kuyruk Efekti
             puck.trail.push({x: puck.x, y: puck.y});
-            if(puck.trail.length > 12) puck.trail.shift(); // Sadece son 12 kareyi hatırla
+            if(puck.trail.length > 12) puck.trail.shift(); 
 
             puck.vx *= puck.friction; puck.vy *= puck.friction;
             puck.x += puck.vx; puck.y += puck.vy;
 
-            // Duvarlardan Sekme (Kesin Sınırlandırmalı)
             if (puck.x - puck.radius < 0) { puck.x = puck.radius; puck.vx *= -1; }
             if (puck.x + puck.radius > canvas.width) { puck.x = canvas.width - puck.radius; puck.vx *= -1; }
 
