@@ -20,6 +20,9 @@
             display: flex; justify-content: center; align-items: center;
             height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif;
             overflow: hidden; flex-direction: column;
+            /* YENİ: Mobilde çift tıklama ile zoom yapılmasını ve metin seçimini engelle */
+            touch-action: none;
+            user-select: none;
         }
 
         /* SOSYAL MEDYA BUTONLARI */
@@ -49,6 +52,7 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: white; font-size: 28px; font-weight: 900;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); z-index: 10;
+            pointer-events: none; /* Dokunmatik oyun için tıklanmayı devre dışı bırak */
         }
 
         .score-box { display: flex; flex-direction: column; align-items: center; }
@@ -62,12 +66,13 @@
             border-radius: 20px;
             box-shadow: 0 0 50px rgba(59, 130, 246, 0.2), inset 0 0 40px rgba(255,255,255,1);
             border: 6px solid #94a3b8;
+            cursor: pointer;
         }
 
         .controls-info {
             position: absolute; bottom: 20px;
             color: rgba(255, 255, 255, 0.5); font-size: 13px; letter-spacing: 1px;
-            text-align: center;
+            text-align: center; pointer-events: none;
         }
         .controls-info span { font-weight: bold; color: white; }
 
@@ -179,7 +184,7 @@
 
     <canvas id="gameCanvas" width="400" height="600"></canvas>
 
-    <div class="controls-info">Kontrol: <span>WASD</span> veya <span>Ok Tuşları</span> ile oynayın.</div>
+    <div class="controls-info">Kontrol: <span>SÜRÜKLE</span>, <span>WASD</span> veya <span>Ok Tuşları</span></div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
@@ -188,24 +193,52 @@
         let gameState = "menu"; 
         let targetScore = 5;
         let goalMessage = "";
-        let playerName = "Oyuncu"; // Varsayılan isim
+        let playerName = "Oyuncu";
 
-        // Kamera Sarsıntısı ve Efekt Değişkenleri (Kısılmış)
         let screenShake = 0;
         let sparks = [];
-
-        // A.I. Sıkışma Koruması
         let cornerTimer = 0;
         let aiRetreating = false;
+
+        // --- YENİ: DOKUNMATİK VE SÜRÜKLEME KONTROLLERİ ---
+        let isDragging = false;
+        let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
+
+        // Mobil ve Mouse koordinatlarını Canvas'ın gerçek piksellerine çeviren fonksiyon
+        function updateDragTarget(e) {
+            e.preventDefault(); // Ekranın kaymasını engelle
+            
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            let canvasX = (clientX - rect.left) * scaleX;
+            let canvasY = (clientY - rect.top) * scaleY;
+
+            // Oyuncu kendi sahasından (orta çizgi) yukarı çıkamaz
+            dragTarget.x = Math.max(player.radius, Math.min(canvas.width - player.radius, canvasX));
+            dragTarget.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, canvasY));
+        }
+
+        // Dokunmatik (Mobil) Olayları
+        canvas.addEventListener("touchstart", (e) => { isDragging = true; updateDragTarget(e); }, { passive: false });
+        canvas.addEventListener("touchmove", (e) => { if (isDragging) updateDragTarget(e); }, { passive: false });
+        canvas.addEventListener("touchend", (e) => { e.preventDefault(); isDragging = false; });
+        canvas.addEventListener("touchcancel", (e) => { e.preventDefault(); isDragging = false; });
+
+        // Fare (Masaüstü) Sürükleme Olayları
+        canvas.addEventListener("mousedown", (e) => { isDragging = true; updateDragTarget(e); });
+        canvas.addEventListener("mousemove", (e) => { if (isDragging) updateDragTarget(e); });
+        window.addEventListener("mouseup", () => { isDragging = false; });
 
         // --- OYUN NESNELERİ ---
         const puck = {
             x: canvas.width / 2, y: canvas.height / 2,
             radius: 12, mass: 1, vx: 0, vy: 0,
-            color: "#1e293b",
-            maxSpeed: 23, // Hız hafif düşürüldü, daha kontrol edilebilir
-            friction: 0.985, 
-            trail: [] 
+            color: "#1e293b", maxSpeed: 23, friction: 0.985, trail: [] 
         };
 
         const player = {
@@ -222,14 +255,12 @@
 
         const goalWidth = 130; 
 
-        // --- KONTROLLER ---
+        // --- KLAVYE KONTROLLERİ ---
         const keys = { up: false, down: false, left: false, right: false };
 
         window.addEventListener("keydown", (e) => {
             let key = e.key.toLowerCase();
-            // Input alanına yazı yazarken ok tuşlarının karakteri hareket ettirmemesi için
             if (document.activeElement === document.getElementById('player-name-input')) return;
-
             if (key === "w" || e.key === "ArrowUp") { keys.up = true; e.preventDefault(); }
             if (key === "s" || e.key === "ArrowDown") { keys.down = true; e.preventDefault(); }
             if (key === "a" || e.key === "ArrowLeft") { keys.left = true; e.preventDefault(); }
@@ -246,7 +277,6 @@
 
         // --- MENÜ ---
         document.getElementById('start-btn').addEventListener('click', () => {
-            // İsim alma ve kontrolü
             let inputVal = document.getElementById('player-name-input').value.trim();
             playerName = inputVal === "" ? "Oyuncu" : inputVal;
             document.getElementById('player-name-display').innerText = playerName;
@@ -272,16 +302,13 @@
             gameState = "playing";
         }
 
-        // --- GÖRSEL EFEKTLER (Daha zarif) ---
+        // --- GÖRSEL EFEKTLER VE ÇİZİM ---
         function createSparks(x, y, color) {
-            // Kıvılcım sayısı ve sıçrama mesafesi azaltıldı
             for(let i=0; i<4; i++) {
                 sparks.push({
                     x: x, y: y,
-                    vx: (Math.random() - 0.5) * 4,
-                    vy: (Math.random() - 0.5) * 4,
-                    alpha: 1,
-                    color: color
+                    vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
+                    alpha: 1, color: color
                 });
             }
         }
@@ -290,8 +317,7 @@
             for(let i=sparks.length-1; i>=0; i--) {
                 let s = sparks[i];
                 ctx.beginPath(); ctx.arc(s.x, s.y, 2.5, 0, Math.PI*2);
-                ctx.fillStyle = s.color; ctx.globalAlpha = s.alpha;
-                ctx.fill();
+                ctx.fillStyle = s.color; ctx.globalAlpha = s.alpha; ctx.fill();
                 s.x += s.vx; s.y += s.vy; s.alpha -= 0.08;
                 if(s.alpha <= 0) sparks.splice(i, 1);
             }
@@ -330,8 +356,7 @@
         }
 
         function drawCircle(obj, isPuck = false) {
-            ctx.shadowBlur = 10; // Işıklandırma yumuşatıldı
-            ctx.shadowColor = obj.color;
+            ctx.shadowBlur = 10; ctx.shadowColor = obj.color;
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
             ctx.fillStyle = obj.color; ctx.fill();
             ctx.shadowBlur = 0; 
@@ -359,7 +384,7 @@
                 p.y = Math.max(p.radius, Math.min(canvas.height - p.radius, p.y));
                 
                 let forceRatio = 0.85; 
-                let bounceBoost = 4; // Fırlatma etkisi azaltıldı (daha kontrollü)
+                let bounceBoost = 4; 
                 
                 p.vx += obj.vx * forceRatio + (cos * bounceBoost);
                 p.vy += obj.vy * forceRatio + (sin * bounceBoost);
@@ -369,9 +394,8 @@
                     p.vx = (p.vx / currentSpeed) * p.maxSpeed; p.vy = (p.vy / currentSpeed) * p.maxSpeed;
                 }
 
-                // Efekt tetikleyicisi daha düşük seviyelere çekildi
                 if(currentSpeed > 12) {
-                    screenShake = 2; // Sarsıntı azaltıldı
+                    screenShake = 2; 
                     createSparks(p.x - cos*p.radius, p.y - sin*p.radius, obj.color);
                 }
             }
@@ -383,13 +407,14 @@
             puck.vx = 0; puck.vy = scorer === 'player' ? -5 : 5; 
             puck.trail = []; 
             player.x = canvas.width / 2; player.y = canvas.height - 50;
+            dragTarget = { x: player.x, y: player.y }; // Sürükleme hedefini sıfırla
             ai.x = canvas.width / 2; ai.y = 50;
             cornerTimer = 0; aiRetreating = false;
         }
 
         function handleGoal(scorer) {
             gameState = "scored";
-            screenShake = 6; // Gol sarsıntısı azaltıldı
+            screenShake = 6; 
             
             if (scorer === 'player') {
                 player.score++;
@@ -429,16 +454,27 @@
         }
 
         function update() {
-            player.vx = 0; player.vy = 0;
-            if (keys.left) player.vx = -player.speed;
-            if (keys.right) player.vx = player.speed;
-            if (keys.up) player.vy = -player.speed;
-            if (keys.down) player.vy = player.speed;
+            // 1. Oyuncu Hareketi (Sürükleme ve Klavye Karma Modu)
+            if (isDragging) {
+                // Sürükleme hızı pürüzsüz bir lerp (linear interpolation) ile verilir
+                let dx = dragTarget.x - player.x;
+                let dy = dragTarget.y - player.y;
+                
+                player.vx = dx * 0.4;
+                player.vy = dy * 0.4;
+            } else {
+                player.vx = 0; player.vy = 0;
+                if (keys.left) player.vx = -player.speed;
+                if (keys.right) player.vx = player.speed;
+                if (keys.up) player.vy = -player.speed;
+                if (keys.down) player.vy = player.speed;
+            }
 
             player.x += player.vx; player.y += player.vy;
             player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
             player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
 
+            // 2. A.I. Sıkışma Çözümü (Anti-Trap)
             let inCorner = puck.y < 80 && (puck.x < 80 || puck.x > canvas.width - 80);
 
             if (inCorner) {
@@ -472,8 +508,9 @@
             ai.x = Math.max(ai.radius, Math.min(canvas.width - ai.radius, ai.x));
             ai.y = Math.max(ai.radius, Math.min(canvas.height / 2 - ai.radius, ai.y));
 
+            // 3. Disk Fiziği & Sekmeler
             puck.trail.push({x: puck.x, y: puck.y});
-            if(puck.trail.length > 10) puck.trail.shift(); // İz daha kısa tutuldu
+            if(puck.trail.length > 10) puck.trail.shift(); 
 
             puck.vx *= puck.friction; puck.vy *= puck.friction;
             puck.x += puck.vx; puck.y += puck.vy;
@@ -508,7 +545,7 @@
 
             ctx.save();
             if(screenShake > 0) {
-                let dx = (Math.random() - 0.5) * 4; // Sarsıntı şiddeti düşürüldü
+                let dx = (Math.random() - 0.5) * 4; 
                 let dy = (Math.random() - 0.5) * 4;
                 ctx.translate(dx, dy);
                 screenShake--;
