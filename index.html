@@ -3,153 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buz Hokeyi 2D | Canvas HTML5</title>
+    <title>Buz Hokeyi 2D | Neon Air Hockey</title>
     <style>
         :root {
             --bg-color: #0f172a;
             --ice-color: #e0f2fe;
-            --line-color: #94a3b8;
             --player-color: #3b82f6;
             --ai-color: #ef4444;
             --puck-color: #1e293b;
         }
 
         body {
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             background-color: var(--bg-color);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            flex-direction: column;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif;
+            overflow: hidden; flex-direction: column;
         }
 
-        /* Modern Skor Tablosu */
         .scoreboard {
-            position: absolute;
-            top: 20px;
-            display: flex;
-            gap: 40px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 15px 40px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            font-size: 28px;
-            font-weight: 800;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            z-index: 10;
+            position: absolute; top: 20px;
+            display: flex; gap: 40px;
+            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);
+            padding: 15px 40px; border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white; font-size: 28px; font-weight: 900;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); z-index: 10;
         }
 
-        .score-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+        .score-box { display: flex; flex-direction: column; align-items: center; }
+        .score-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; margin-bottom: 5px; }
 
-        .score-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            opacity: 0.8;
-            margin-bottom: 5px;
-        }
+        #player-score { color: var(--player-color); text-shadow: 0 0 10px var(--player-color); }
+        #ai-score { color: var(--ai-color); text-shadow: 0 0 10px var(--ai-color); }
 
-        #player-score { color: var(--player-color); }
-        #ai-score { color: var(--ai-color); }
-
-        /* Oyun Alanı (Canvas) Stili */
         #gameCanvas {
             background-color: var(--ice-color);
-            border-radius: 15px;
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255,255,255,0.8);
-            border: 8px solid #cbd5e1;
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(59, 130, 246, 0.2), inset 0 0 40px rgba(255,255,255,1);
+            border: 6px solid #94a3b8;
         }
 
         .controls-info {
-            position: absolute;
-            bottom: 20px;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 14px;
-            letter-spacing: 1px;
+            position: absolute; bottom: 20px;
+            color: rgba(255, 255, 255, 0.5); font-size: 13px; letter-spacing: 1px;
+            text-align: center;
         }
+        .controls-info span { font-weight: bold; color: white; }
 
-        /* --- YENİ: MENÜ VE OVERLAY STİLLERİ --- */
+        /* --- MENÜ VE EKRANLAR --- */
         .overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(8px);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 20;
-            color: white;
-            transition: 0.3s;
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 20; color: white; transition: 0.3s;
         }
 
-        .overlay.hidden {
-            display: none !important;
-        }
+        .overlay.hidden { display: none !important; }
 
         .menu-box {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            text-align: center;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
-            width: 300px;
+            background: rgba(255, 255, 255, 0.05); padding: 40px; border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1); text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 300px;
         }
 
-        .menu-box h2 { margin-top: 0; margin-bottom: 25px; font-size: 24px; }
+        .menu-box h2 { margin-top: 0; margin-bottom: 25px; font-size: 26px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 15px rgba(255,255,255,0.5); }
         
         .setting-group { margin-bottom: 20px; text-align: left; }
-        .setting-group label { display: block; font-size: 12px; text-transform: uppercase; margin-bottom: 8px; color: #cbd5e1; font-weight: bold;}
+        .setting-group label { display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 8px; color: #cbd5e1; font-weight: bold;}
         .setting-group select { 
-            width: 100%; padding: 10px; border-radius: 8px; border: none; 
-            background: rgba(255,255,255,0.9); font-weight: bold; cursor: pointer; outline: none;
+            width: 100%; padding: 12px; border-radius: 8px; border: none; 
+            background: rgba(255,255,255,0.9); font-weight: bold; cursor: pointer; outline: none; font-size: 14px;
         }
 
         .btn-start {
             background: var(--player-color); color: white; border: none;
-            padding: 12px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold;
-            cursor: pointer; transition: 0.2s; margin-top: 10px;
+            padding: 14px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: 0.2s; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
         }
-        .btn-start:hover { background: #2563eb; transform: translateY(-2px); }
+        .btn-start:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 0 25px rgba(59, 130, 246, 0.8); }
 
-        #game-over-title { font-size: 36px; margin-bottom: 10px; }
-        #final-score-text { font-size: 18px; color: #94a3b8; margin-bottom: 30px; }
+        #game-over-title { font-size: 38px; margin-bottom: 10px; font-weight: 900; }
+        #final-score-text { font-size: 18px; color: #94a3b8; margin-bottom: 30px; font-weight: bold;}
 
+        /* Mobilde Scoreboard'u Sığdır */
+        @media screen and (max-width: 500px) {
+            .scoreboard { padding: 10px 20px; gap: 20px; font-size: 20px; }
+            #gameCanvas { width: 95vw; height: auto; aspect-ratio: 4/6; }
+        }
     </style>
 </head>
 <body>
 
     <div id="start-menu" class="overlay">
         <div class="menu-box">
-            <h2>Buz Hokeyi</h2>
+            <h2>NEON AIR HOCKEY</h2>
             <div class="setting-group">
                 <label>Zorluk Seviyesi</label>
                 <select id="difficulty-select">
-                    <option value="2.5">Kolay</option>
-                    <option value="4" selected>Orta</option>
-                    <option value="6">Zor</option>
+                    <option value="3">Çırak (Kolay)</option>
+                    <option value="4.5" selected>Profesyonel (Orta)</option>
+                    <option value="6.5">Şampiyon (Zor)</option>
                 </select>
             </div>
             <div class="setting-group">
                 <label>Hedef Skor (Bitiş)</label>
                 <select id="target-score-select">
-                    <option value="3">3 Gol</option>
-                    <option value="5" selected>5 Gol</option>
-                    <option value="7">7 Gol</option>
+                    <option value="3">3 Golde Biter</option>
+                    <option value="5" selected>5 Golde Biter</option>
+                    <option value="7">7 Golde Biter</option>
                 </select>
             </div>
-            <button class="btn-start" id="start-btn">Oyuna Başla</button>
+            <button class="btn-start" id="start-btn">Buz Piste Çık</button>
         </div>
     </div>
 
@@ -157,64 +123,75 @@
         <div class="menu-box">
             <h2 id="game-over-title">KAZANDIN!</h2>
             <div id="final-score-text">Sen 5 - 3 AI</div>
-            <button class="btn-start" id="restart-btn">Tekrar Oyna</button>
+            <button class="btn-start" id="restart-btn">Rövanş İste</button>
         </div>
     </div>
 
     <div class="scoreboard">
         <div class="score-box">
-            <span class="score-label">Yapay Zeka</span>
+            <span class="score-label">A.I. Model</span>
             <span id="ai-score">0</span>
         </div>
-        <div class="score-box" style="color: rgba(255,255,255,0.3);">|</div>
+        <div class="score-box" style="color: rgba(255,255,255,0.2);">|</div>
         <div class="score-box">
-            <span class="score-label">Sen</span>
+            <span class="score-label">Oyuncu</span>
             <span id="player-score">0</span>
         </div>
     </div>
 
     <canvas id="gameCanvas" width="400" height="600"></canvas>
 
-    <div class="controls-info">Kontrol: Klavyedeki OK TUŞLARINI (⬅️ ⬆️ ⬇️ ➡️) kullanın</div>
+    <div class="controls-info">Kontrol: <span>WASD</span> veya <span>Ok Tuşları</span> ile oynayın.</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // OYUN DURUMU (State Machine)
-        let gameState = "menu"; // menu, playing, scored, gameover
+        let gameState = "menu"; 
         let targetScore = 5;
         let goalMessage = "";
 
-        // --- OYUN NESNELERİ ---
+        // --- OYUN NESNELERİ VE FİZİK ---
         const puck = {
             x: canvas.width / 2, y: canvas.height / 2,
             radius: 12, mass: 1, vx: 0, vy: 0,
             color: "#1e293b",
-            maxSpeed: 22, // Hız limiti artırıldı (daha dinamik)
-            friction: 0.99
+            maxSpeed: 25, // Çok daha hızlı ve dinamik
+            friction: 0.985, // Hafifçe daha fazla buz kayganlığı
+            trail: [] // YENİ: Görsel iz efekti için hafıza
         };
 
         const player = {
             x: canvas.width / 2, y: canvas.height - 50,
-            radius: 20, mass: 5, vx: 0, vy: 0,
-            speed: 6.5, color: "#3b82f6", score: 0
+            radius: 22, mass: 5, vx: 0, vy: 0,
+            speed: 7, color: "#3b82f6", score: 0
         };
 
         const ai = {
             x: canvas.width / 2, y: 50,
-            radius: 20, mass: 5, vx: 0, vy: 0,
-            speed: 4, color: "#ef4444", score: 0
+            radius: 22, mass: 5, vx: 0, vy: 0,
+            speed: 4.5, color: "#ef4444", score: 0
         };
 
-        const goalWidth = 120;
-        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        const goalWidth = 130; // Gol atması biraz daha rahatlatıldı
+
+        // --- WASD VE OK TUŞLARI KONTROLÜ ---
+        const keys = { up: false, down: false, left: false, right: false };
 
         window.addEventListener("keydown", (e) => {
-            if (keys.hasOwnProperty(e.key)) { keys[e.key] = true; e.preventDefault(); }
+            let key = e.key.toLowerCase();
+            if (key === "w" || e.key === "ArrowUp") { keys.up = true; e.preventDefault(); }
+            if (key === "s" || e.key === "ArrowDown") { keys.down = true; e.preventDefault(); }
+            if (key === "a" || e.key === "ArrowLeft") { keys.left = true; e.preventDefault(); }
+            if (key === "d" || e.key === "ArrowRight") { keys.right = true; e.preventDefault(); }
         });
+
         window.addEventListener("keyup", (e) => {
-            if (keys.hasOwnProperty(e.key)) { keys[e.key] = false; }
+            let key = e.key.toLowerCase();
+            if (key === "w" || e.key === "ArrowUp") keys.up = false;
+            if (key === "s" || e.key === "ArrowDown") keys.down = false;
+            if (key === "a" || e.key === "ArrowLeft") keys.left = false;
+            if (key === "d" || e.key === "ArrowRight") keys.right = false;
         });
 
         // --- MENÜ KONTROLLERİ ---
@@ -238,56 +215,96 @@
             gameState = "playing";
         }
 
-        // --- ÇİZİM FONKSİYONLARI ---
+        // --- ÇİZİM FONKSİYONLARI (GELİŞMİŞ SAHA VE EFEKTLER) ---
         function drawSaha() {
+            ctx.shadowBlur = 0; // Sahada gölge yok
+            
+            // Kale alanları (Yarım daireler)
+            ctx.beginPath(); ctx.arc(canvas.width / 2, 0, 80, 0, Math.PI); 
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
+            
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height, 80, Math.PI, Math.PI * 2); 
+            ctx.strokeStyle = "rgba(59, 130, 246, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
+
+            // Orta Çizgi ve Daire
             ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 4; ctx.stroke();
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.5)"; ctx.lineWidth = 4; ctx.stroke();
 
-            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2); ctx.stroke();
-            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 5, 0, Math.PI * 2); ctx.fillStyle = "#ef4444"; ctx.fill();
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(148, 163, 184, 0.5)"; ctx.fill();
 
-            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 10); ctx.fillStyle = "#ef4444"; ctx.fill();
-            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 10, goalWidth, 10); ctx.fillStyle = "#3b82f6"; ctx.fill();
+            // AI Kalesi
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 12); 
+            ctx.fillStyle = "rgba(239, 68, 68, 0.8)"; ctx.fill();
+
+            // Oyuncu Kalesi
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 12, goalWidth, 12); 
+            ctx.fillStyle = "rgba(59, 130, 246, 0.8)"; ctx.fill();
         }
 
-        function drawCircle(obj, isPuck = false) {
-            ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
-            ctx.fillStyle = obj.color; ctx.fill();
-            if (!isPuck) {
-                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.5, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fill();
+        function drawPuckTrail() {
+            for (let i = 0; i < puck.trail.length; i++) {
+                let alpha = i / puck.trail.length;
+                ctx.beginPath();
+                ctx.arc(puck.trail[i].x, puck.trail[i].y, puck.radius * alpha * 0.8, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(30, 41, 59, ${alpha * 0.4})`;
+                ctx.fill();
             }
         }
 
-        // --- FİZİK VE ÇARPIŞMA ---
-        function checkCollision(circle1, circle2) {
-            let dx = circle2.x - circle1.x;
-            let dy = circle2.y - circle1.y;
+        function drawCircle(obj, isPuck = false) {
+            // Neon Glow Efekti
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = obj.color;
+            
+            ctx.beginPath(); 
+            ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+            ctx.fillStyle = obj.color; 
+            ctx.fill();
+            
+            ctx.shadowBlur = 0; // İç detaylarda gölgeyi kapat
+
+            if (!isPuck) {
+                // Tokmak kulpu detayı
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.4, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fill();
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.2, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fill();
+            }
+        }
+
+        // --- MÜKEMMELLEŞTİRİLMİŞ FİZİK ---
+        function checkCollision(obj, p) {
+            let dx = p.x - obj.x;
+            let dy = p.y - obj.y;
             let distance = Math.sqrt(dx * dx + dy * dy);
 
-            if (distance < circle1.radius + circle2.radius) {
+            if (distance < obj.radius + p.radius) {
                 let angle = Math.atan2(dy, dx);
                 let sin = Math.sin(angle);
                 let cos = Math.cos(angle);
 
-                let overlap = circle1.radius + circle2.radius - distance;
-                if(circle2 === puck) {
-                    puck.x += cos * overlap;
-                    puck.y += sin * overlap;
-                    
-                    // YENİ: Topa Vurunca Hızlandırma (Bounce Boost)
-                    let forceRatio = 0.8; 
-                    let bounceBoost = 4; // Vuruş şiddetine eklenen sabit ivme
-                    
-                    puck.vx += circle1.vx * forceRatio + (cos * bounceBoost);
-                    puck.vy += circle1.vy * forceRatio + (sin * bounceBoost);
+                let overlap = obj.radius + p.radius - distance;
+                
+                // 1. ADIM: İÇ İÇE GEÇMEYİ ANINDA ÇÖZ (Sıkışmayı engeller)
+                p.x += cos * overlap;
+                p.y += sin * overlap;
 
-                    // Hız limitini kontrol et
-                    let currentSpeed = Math.sqrt(puck.vx**2 + puck.vy**2);
-                    if(currentSpeed > puck.maxSpeed) {
-                        puck.vx = (puck.vx / currentSpeed) * puck.maxSpeed;
-                        puck.vy = (puck.vy / currentSpeed) * puck.maxSpeed;
-                    }
+                // 2. ADIM: ZORUNLU SINIRLANDIRMA (Duvarın içine itilmeyi tamamen yasaklar)
+                p.x = Math.max(p.radius, Math.min(canvas.width - p.radius, p.x));
+                p.y = Math.max(p.radius, Math.min(canvas.height - p.radius, p.y));
+                
+                // 3. ADIM: GÜÇ AKTARIMI (Hızlı Vuruş Dinamiği)
+                let forceRatio = 0.8; 
+                let bounceBoost = 6; // Vurulduğunda eklenen patlama ivmesi
+                
+                p.vx += obj.vx * forceRatio + (cos * bounceBoost);
+                p.vy += obj.vy * forceRatio + (sin * bounceBoost);
+
+                let currentSpeed = Math.sqrt(p.vx**2 + p.vy**2);
+                if(currentSpeed > p.maxSpeed) {
+                    p.vx = (p.vx / currentSpeed) * p.maxSpeed;
+                    p.vy = (p.vy / currentSpeed) * p.maxSpeed;
                 }
             }
         }
@@ -295,7 +312,8 @@
         // --- OYUN MANTIĞI ---
         function resetPuck(scorer) {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
-            puck.vx = 0; puck.vy = scorer === 'player' ? -3 : 3; 
+            puck.vx = 0; puck.vy = scorer === 'player' ? -4 : 4; 
+            puck.trail = []; // Kuyruğu temizle
             player.x = canvas.width / 2; player.y = canvas.height - 50;
             ai.x = canvas.width / 2; ai.y = 50;
         }
@@ -309,21 +327,19 @@
             } else {
                 ai.score++;
                 document.getElementById("ai-score").innerText = ai.score;
-                goalMessage = "GOL! (YAPAY ZEKA)";
+                goalMessage = "GOL! (A.I.)"; // Ekrana sığacak kısa ve net metin
             }
 
-            // Oyun Bitiş Kontrolü
             if (player.score >= targetScore || ai.score >= targetScore) {
                 setTimeout(() => {
                     gameState = "gameover";
                     document.getElementById('game-over-menu').classList.remove('hidden');
                     const title = document.getElementById('game-over-title');
-                    title.innerText = player.score >= targetScore ? "KAZANDIN! 🎉" : "KAYBETTİN! 💻";
+                    title.innerText = player.score >= targetScore ? "ŞAMPİYON! 🏆" : "KAYBETTİN! 💻";
                     title.style.color = player.score >= targetScore ? "var(--player-color)" : "var(--ai-color)";
-                    document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${ai.score} Yapay Zeka`;
+                    document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${ai.score} A.I. Model`;
                 }, 1000);
             } else {
-                // 1.5 Saniye sonra oyuna devam
                 setTimeout(() => {
                     resetPuck(scorer === 'player' ? 'ai' : 'player');
                     gameState = "playing";
@@ -332,12 +348,12 @@
         }
 
         function update() {
-            // 1. Oyuncu Hareketi
+            // 1. Oyuncu (WASD + Oklar)
             player.vx = 0; player.vy = 0;
-            if (keys.ArrowLeft) player.vx = -player.speed;
-            if (keys.ArrowRight) player.vx = player.speed;
-            if (keys.ArrowUp) player.vy = -player.speed;
-            if (keys.ArrowDown) player.vy = player.speed;
+            if (keys.left) player.vx = -player.speed;
+            if (keys.right) player.vx = player.speed;
+            if (keys.up) player.vy = -player.speed;
+            if (keys.down) player.vy = player.speed;
 
             player.x += player.vx; player.y += player.vy;
             player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
@@ -350,28 +366,34 @@
                 else if (ai.x > aiTargetX + 10) ai.vx = -ai.speed;
                 else ai.vx = 0;
                 
-                if (ai.y < puck.y - 10) ai.vy = ai.speed;
-                else if (ai.y > puck.y + 10) ai.vy = -ai.speed;
+                if (ai.y < puck.y - 15) ai.vy = ai.speed;
+                else if (ai.y > puck.y + 15) ai.vy = -ai.speed;
                 else ai.vy = 0;
             } else {
                 if (ai.x < canvas.width / 2 - 10) ai.vx = ai.speed * 0.5;
                 else if (ai.x > canvas.width / 2 + 10) ai.vx = -ai.speed * 0.5;
                 else ai.vx = 0;
-                if (ai.y > 50) ai.vy = -ai.speed * 0.5; else ai.vy = 0;
+                if (ai.y > 60) ai.vy = -ai.speed * 0.5; else ai.vy = 0;
+            }
+
+            // ANTI-TRAP SİSTEMİ: AI topu köşede ezip kitleyemez!
+            let inCorner = (puck.x < 40 || puck.x > canvas.width - 40) && puck.y < 40;
+            if (inCorner && ai.y < 50) {
+                ai.vy = ai.speed; // AI'yı zorla aşağı iterek topa çıkma payı bırak
             }
 
             ai.x += ai.vx; ai.y += ai.vy;
+            ai.x = Math.max(ai.radius, Math.min(canvas.width - ai.radius, ai.x));
+            ai.y = Math.max(ai.radius, Math.min(canvas.height / 2 - ai.radius, ai.y));
 
-            // YENİ: AI Köşe Sıkışma Koruması (Anti-Trap)
-            // AI artık duvarlara tamamen yapışamaz, böylece disk arkasından sekecek boşluk bulur.
-            const aiMargin = 15; 
-            ai.x = Math.max(ai.radius + aiMargin, Math.min(canvas.width - ai.radius - aiMargin, ai.x));
-            ai.y = Math.max(ai.radius + aiMargin, Math.min(canvas.height / 2 - ai.radius, ai.y));
+            // 3. Disk Fiziği & Kuyruk Efekti
+            puck.trail.push({x: puck.x, y: puck.y});
+            if(puck.trail.length > 12) puck.trail.shift(); // Sadece son 12 kareyi hatırla
 
-            // 3. Disk Fiziği
             puck.vx *= puck.friction; puck.vy *= puck.friction;
             puck.x += puck.vx; puck.y += puck.vy;
 
+            // Duvarlardan Sekme (Kesin Sınırlandırmalı)
             if (puck.x - puck.radius < 0) { puck.x = puck.radius; puck.vx *= -1; }
             if (puck.x + puck.radius > canvas.width) { puck.x = canvas.width - puck.radius; puck.vx *= -1; }
 
@@ -395,6 +417,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             drawSaha();
+            drawPuckTrail();
             drawCircle(player);
             drawCircle(ai);
             drawCircle(puck, true);
@@ -402,24 +425,22 @@
             if (gameState === "playing") {
                 update();
             } else if (gameState === "scored") {
-                // YENİ: Gol Olduğunda Ekrana Yarı Saydam Siyah Perde ve GOL Yazısı
-                ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
+                ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                ctx.fillStyle = "white";
-                ctx.font = "900 48px 'Segoe UI'";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
+                ctx.shadowBlur = 20; ctx.shadowColor = "white";
+                ctx.fillStyle = "white"; ctx.font = "900 42px 'Segoe UI'";
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 ctx.fillText(goalMessage, canvas.width / 2, canvas.height / 2 - 20);
                 
-                ctx.font = "bold 24px 'Segoe UI'";
+                ctx.shadowBlur = 0;
+                ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
                 ctx.fillText(`Skor: ${player.score} - ${ai.score}`, canvas.width / 2, canvas.height / 2 + 30);
             }
 
             requestAnimationFrame(gameLoop);
         }
 
-        // Çizimleri başlat ama update'i menü geçene kadar beklet
         gameLoop();
 
     </script>
