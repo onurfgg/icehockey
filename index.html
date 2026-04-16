@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buz Hokeyi 2D | Online Multiplayer</title>
+    <title>Buz Hokeyi 2D | Online & A.I.</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
             --bg-color: #0f172a; --ice-color: #e0f2fe;
-            --player-color: #3b82f6; --ai-color: #ef4444; --puck-color: #1e293b;
+            --player-color: #3b82f6; --enemy-color: #ef4444; --puck-color: #1e293b;
         }
         body {
             margin: 0; padding: 0; background-color: var(--bg-color);
@@ -26,6 +26,7 @@
         }
         .btn-linkedin { background: #0077b5; } .btn-linkedin:hover { background: #005885; transform: translateY(-2px); }
         .btn-github { background: #24292e; } .btn-github:hover { background: #1b1f23; transform: translateY(-2px); }
+        
         .scoreboard {
             position: absolute; top: 20px; display: flex; gap: 40px;
             background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);
@@ -34,32 +35,51 @@
         }
         .score-box { display: flex; flex-direction: column; align-items: center; }
         .score-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; margin-bottom: 5px; }
+        
         #player-score { color: var(--player-color); text-shadow: 0 0 10px var(--player-color); }
-        #enemy-score { color: var(--ai-color); text-shadow: 0 0 10px var(--ai-color); }
+        #enemy-score { color: var(--enemy-color); text-shadow: 0 0 10px var(--enemy-color); }
+        
+        /* OYUN ALANI KAPSAYICISI (Canvas'ı döndürmek için) */
+        #canvas-wrapper {
+            position: relative;
+            transition: transform 0.5s ease-in-out;
+        }
+        
         #gameCanvas {
             background-color: var(--ice-color); border-radius: 20px; cursor: pointer; touch-action: none;
             box-shadow: 0 0 50px rgba(59, 130, 246, 0.2), inset 0 0 40px rgba(255,255,255,1); border: 6px solid #94a3b8;
+            display: block;
         }
+        
+        /* GUEST EKRANINI 180 DERECE ÇEVİREN SINIF */
+        .mirrored-view {
+            transform: rotate(180deg);
+        }
+
         .controls-info { position: absolute; bottom: 20px; color: rgba(255, 255, 255, 0.5); font-size: 13px; letter-spacing: 1px; text-align: center; pointer-events: none; }
         .controls-info span { font-weight: bold; color: white; }
+        
         .overlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; color: white; transition: 0.3s;
         }
         .overlay.hidden { display: none !important; }
         .menu-box {
-            background: rgba(255, 255, 255, 0.05); padding: 40px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 300px;
+            background: rgba(255, 255, 255, 0.05); padding: 40px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.6); width: 320px;
         }
-        .menu-box h2 { margin-top: 0; margin-bottom: 25px; font-size: 26px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 15px rgba(255,255,255,0.5); }
-        .setting-group { margin-bottom: 20px; text-align: left; }
-        .setting-group label { display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 8px; color: #cbd5e1; font-weight: bold;}
+        .menu-box h2 { margin-top: 0; margin-bottom: 25px; font-size: 24px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 0 15px rgba(255,255,255,0.5); }
+        .setting-group { margin-bottom: 15px; text-align: left; }
+        .setting-group label { display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 5px; color: #cbd5e1; font-weight: bold;}
         .setting-group select, .setting-group input { 
-            width: 100%; padding: 12px; border-radius: 8px; border: none; background: rgba(255,255,255,0.9); font-weight: bold; outline: none; font-size: 14px; box-sizing: border-box;
+            width: 100%; padding: 10px; border-radius: 8px; border: none; background: rgba(255,255,255,0.9); font-weight: bold; outline: none; font-size: 14px; box-sizing: border-box;
         }
         .btn-start {
-            background: var(--player-color); color: white; border: none; padding: 14px 0; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            background: var(--player-color); color: white; border: none; padding: 12px 0; width: 100%; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
         }
         .btn-start:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 0 25px rgba(59, 130, 246, 0.8); }
+        .divider { margin: 15px 0; color: #94a3b8; font-size: 12px; font-weight: bold; display: flex; align-items: center; }
+        .divider::before, .divider::after { content: ""; flex: 1; border-bottom: 1px solid rgba(255,255,255,0.2); margin: 0 10px; }
+        
         #game-over-title { font-size: 38px; margin-bottom: 10px; font-weight: 900; }
         #final-score-text { font-size: 18px; color: #94a3b8; margin-bottom: 30px; font-weight: bold;}
         .room-info { margin-top: 15px; font-size: 13px; color: #facc15; font-weight: bold; }
@@ -87,23 +107,40 @@
 
     <div id="start-menu" class="overlay">
         <div class="menu-box">
-            <h2>NEON AIR HOCKEY<br><small style="color:#facc15; font-size:14px;">ONLINE MULTIPLAYER</small></h2>
+            <h2>NEON AIR HOCKEY</h2>
             
             <div id="mode-selection">
                 <div class="setting-group">
-                    <label>Hedef Skor (Bitiş)</label>
+                    <label>Hedef Skor</label>
                     <select id="target-score-select">
-                        <option value="3">3 Golde Biter</option>
-                        <option value="5" selected>5 Golde Biter</option>
-                        <option value="7">7 Golde Biter</option>
+                        <option value="3">3 Gol</option>
+                        <option value="5" selected>5 Gol</option>
+                        <option value="7">7 Gol</option>
                     </select>
                 </div>
-                <button class="btn-start" id="btn-create-room" style="background:#10b981;">Oda Kur (Host)</button>
                 
-                <div style="margin: 20px 0; color: #cbd5e1; font-size: 12px; font-weight: bold;">- VEYA ODAYA KATIL -</div>
+                <div class="setting-group">
+                    <label>A.I. Zorluk</label>
+                    <select id="difficulty-select">
+                        <option value="3">Kolay</option>
+                        <option value="4.5" selected>Orta</option>
+                        <option value="6.5">Zor</option>
+                    </select>
+                </div>
+                <button class="btn-start" id="btn-play-ai">Yapay Zekaya Karşı Oyna</button>
+
+                <div class="divider">VEYA ONLINE OYNA</div>
                 
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-start" id="btn-create-room" style="background:#10b981; margin-top:0;">Oda Kur</button>
+                    <button class="btn-start" id="btn-show-join" style="background:#f59e0b; margin-top:0;">Odaya Gir</button>
+                </div>
+            </div>
+
+            <div id="join-room-section" class="hidden-group">
                 <input type="text" id="room-id-input" placeholder="Oda Kodunu Girin" style="width:100%; padding:12px; border-radius:8px; border:none; margin-bottom:10px; font-weight:bold; text-align:center; outline:none;">
-                <button class="btn-start" id="btn-join-room" style="background:#f59e0b;">Bağlan (Misafir)</button>
+                <button class="btn-start" id="btn-join-room" style="background:#f59e0b;">Bağlan</button>
+                <button class="btn-start" id="btn-back-menu" style="background:#64748b; margin-top:5px;">Geri</button>
             </div>
 
             <div id="host-waiting" class="hidden-group">
@@ -117,32 +154,37 @@
     <div id="game-over-menu" class="overlay hidden">
         <div class="menu-box">
             <h2 id="game-over-title">OYUN BİTTİ</h2>
-            <div id="final-score-text">Mavi 5 - 3 Kırmızı</div>
+            <div id="final-score-text">Skor</div>
             <button class="btn-start" id="restart-btn">Rövanş Başlat</button>
+            <button class="btn-start" id="main-menu-btn" style="background:#64748b; margin-top:5px;">Ana Menü</button>
         </div>
     </div>
 
     <div class="scoreboard">
         <div class="score-box">
-            <span class="score-label" id="enemy-label">Kırmızı (GUEST)</span>
+            <span class="score-label" id="enemy-label">Rakip</span>
             <span id="enemy-score">0</span>
         </div>
         <div class="score-box" style="color: rgba(255,255,255,0.2);">|</div>
         <div class="score-box">
-            <span class="score-label" id="player-label">Mavi (HOST)</span>
+            <span class="score-label" id="player-label">Sen</span>
             <span id="player-score">0</span>
         </div>
     </div>
 
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div id="canvas-wrapper">
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+    </div>
 
     <div class="controls-info">Kontrol: <span>SÜRÜKLE</span>, <span>WASD</span> veya <span>Ok Tuşları</span></div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+        const canvasWrapper = document.getElementById("canvas-wrapper");
 
-        // --- ONLINE MULTIPLAYER AĞ (WebRTC/PeerJS) DEĞİŞKENLERİ ---
+        // --- OYUN DEĞİŞKENLERİ ---
+        let gameMode = "ai"; // "ai" veya "online"
         let myPeer = null;
         let connection = null;
         let isHost = false;
@@ -155,10 +197,14 @@
         let screenShake = 0;
         let sparks = [];
 
+        // A.I. Sıkışma Koruması
+        let cornerTimer = 0;
+        let aiRetreating = false;
+
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // --- KUSURSUZ DOKUNMATİK / FARE KONTROLÜ ---
+        // --- KUSURSUZ DOKUNMATİK / FARE KONTROLÜ (MİRRORED VIEW UYUMLU) ---
         function updateDragTarget(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -167,16 +213,16 @@
             let canvasX = (e.clientX - rect.left) * scaleX;
             let canvasY = (e.clientY - rect.top) * scaleY;
 
-            // Host (Mavi) Sadece kendi yarı sahasında oynar (Alt taraf)
-            if (isHost) {
-                dragTarget.x = Math.max(22, Math.min(canvas.width - 22, canvasX)); 
-                dragTarget.y = Math.max(canvas.height / 2 + 22, Math.min(canvas.height - 22, canvasY));
-            } 
-            // Guest (Kırmızı) Sadece kendi yarı sahasında oynar (Üst taraf)
-            else if (isGuest) {
-                dragTarget.x = Math.max(22, Math.min(canvas.width - 22, canvasX)); 
-                dragTarget.y = Math.max(22, Math.min(canvas.height / 2 - 22, canvasY));
+            // EĞER GUEST İSE (Canvas ters çevrildiği için koordinatları da tersine çevirmeliyiz)
+            if (isGuest) {
+                canvasX = canvas.width - canvasX;
+                canvasY = canvas.height - canvasY;
             }
+
+            // GUEST DE HOST DA ARTIK KENDİNİ AŞAĞIDA (Mavi tarafta) GÖRÜYOR!
+            // Bu yüzden herkes sadece ALT sahada (height/2 ile height arası) oynayabilir.
+            dragTarget.x = Math.max(22, Math.min(canvas.width - 22, canvasX)); 
+            dragTarget.y = Math.max(canvas.height / 2 + 22, Math.min(canvas.height - 22, canvasY));
         }
 
         canvas.addEventListener("pointerdown", (e) => { 
@@ -214,82 +260,110 @@
             color: "#1e293b", maxSpeed: 23, friction: 0.985, trail: [] 
         };
 
-        const player = { // HOST (Mavi - Alt)
+        const player = { // ALT OYUNCU (Host veya AI Modunda Sen)
             x: canvas.width / 2, y: canvas.height - 50,
             radius: 22, mass: 5, vx: 0, vy: 0, speed: 7, color: "#3b82f6", score: 0
         };
 
-        const enemy = { // GUEST (Kırmızı - Üst)
+        const enemy = { // ÜST OYUNCU (Guest veya A.I.)
             x: canvas.width / 2, y: 50,
-            radius: 22, mass: 5, vx: 0, vy: 0, speed: 7, color: "#ef4444", score: 0
+            radius: 22, mass: 5, vx: 0, vy: 0, speed: 4.5, color: "#ef4444", score: 0
         };
 
         const goalWidth = 130; 
 
-        // --- WEBRTC (ONLINE) KONTROLLERİ VE MANTIK ---
+        // --- MENÜ BUTONLARI ---
         
-        function generateShortId() {
-            return Math.random().toString(36).substring(2, 7).toUpperCase();
-        }
+        // A.I. İle Oyna
+        document.getElementById('btn-play-ai').addEventListener('click', () => {
+            gameMode = "ai";
+            enemy.speed = parseFloat(document.getElementById('difficulty-select').value);
+            targetScore = parseInt(document.getElementById('target-score-select').value);
+            
+            document.getElementById('enemy-label').innerText = "A.I. Model";
+            document.getElementById('player-label').innerText = "Sen";
+            canvasWrapper.classList.remove('mirrored-view'); // AI modunda her zaman düz bakıyoruz
+            
+            startMatch();
+        });
+
+        // Odaya Gir Menüsünü Aç
+        document.getElementById('btn-show-join').addEventListener('click', () => {
+            document.getElementById('mode-selection').classList.add('hidden-group');
+            document.getElementById('join-room-section').classList.remove('hidden-group');
+        });
+
+        document.getElementById('btn-back-menu').addEventListener('click', () => {
+            document.getElementById('join-room-section').classList.add('hidden-group');
+            document.getElementById('mode-selection').classList.remove('hidden-group');
+        });
+
+        function generateShortId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
 
         // Host (Kurucu) Ol
         document.getElementById('btn-create-room').addEventListener('click', () => {
+            gameMode = "online";
             targetScore = parseInt(document.getElementById('target-score-select').value);
             document.getElementById('mode-selection').classList.add('hidden-group');
             document.getElementById('host-waiting').classList.remove('hidden-group');
             
+            document.getElementById('enemy-label').innerText = "Guest";
+            document.getElementById('player-label').innerText = "Host (Sen)";
+            canvasWrapper.classList.remove('mirrored-view'); // Host düz bakar
+
             let customId = generateShortId();
             myPeer = new Peer(customId);
             
-            myPeer.on('open', (id) => {
-                document.getElementById('room-code-display').innerText = id;
-            });
+            myPeer.on('open', (id) => { document.getElementById('room-code-display').innerText = id; });
 
             myPeer.on('connection', (conn) => {
                 connection = conn;
                 isHost = true;
                 
                 connection.on('data', (data) => {
-                    // Misafir (Kırmızı) tokmağının hareketlerini al
                     if (data.type === 'input') {
                         enemy.x = data.x;
                         enemy.y = data.y;
                     }
                 });
 
-                connection.on('close', () => { alert("Misafir oyundan ayrıldı."); location.reload(); });
-                
-                startOnlineGame(); // Bağlantı kurulduğunda menüyü kapatıp oyunu başlat
+                connection.on('close', () => { alert("Misafir ayrıldı."); location.reload(); });
+                startMatch();
             });
             
-            myPeer.on('error', (err) => {
-                document.getElementById('room-code-display').innerText = "HATA OLUŞTU.";
-            });
+            myPeer.on('error', () => { document.getElementById('room-code-display').innerText = "HATA"; });
         });
 
         // Guest (Misafir) Katıl
         document.getElementById('btn-join-room').addEventListener('click', () => {
             let code = document.getElementById('room-id-input').value.trim().toUpperCase();
-            if (!code) return alert("Lütfen geçerli bir oda kodu girin!");
+            if (!code) return;
             
             document.getElementById('btn-join-room').innerText = "Bağlanıyor...";
+            gameMode = "online";
             
+            // GUEST EKRANINI TERS ÇEVİRİYORUZ!
+            // Guest kendini aşağıda (mavi) hissedecek. 
+            document.getElementById('enemy-label').innerText = "Host";
+            document.getElementById('player-label').innerText = "Guest (Sen)";
+            canvasWrapper.classList.add('mirrored-view'); 
+
             myPeer = new Peer();
             myPeer.on('open', () => {
                 connection = myPeer.connect(code);
                 
                 connection.on('open', () => {
                     isGuest = true;
-                    dragTarget = { x: enemy.x, y: enemy.y }; // Guest'in dokunmatik hedefini yukarıya al
+                    // Sürükleme hedefini misafir için "Masa Üstündeki" Mavi Tokmağın alanına (Altta) ayarla
+                    // Çünkü o ekranı ters görüyor! Onun için Alt taraf aslında bizim fizik motorumuzdaki Üst taraf (enemy.y = 50)
+                    dragTarget = { x: enemy.x, y: canvas.height - enemy.y }; 
                     
                     connection.on('data', (data) => {
-                        // Hosttan gelen oyun dünyasını kopyala
                         if (data.type === 'state') {
                             puck.x = data.puck.x; puck.y = data.puck.y;
                             player.x = data.player.x; player.y = data.player.y;
                             player.score = data.score.player; enemy.score = data.score.enemy;
                             
-                            // State Değişimi Yönetimi (GOL, OYUN SONU, TEKRAR BAŞLA)
                             if (gameState !== data.gameState) {
                                 gameState = data.gameState;
                                 goalMessage = data.goalMessage;
@@ -302,42 +376,47 @@
                             document.getElementById("enemy-score").innerText = enemy.score;
                         } 
                         else if (data.type === 'spark') {
-                            createSparks(data.x, data.y, data.color);
-                            screenShake = 3;
+                            createSparks(data.x, data.y, data.color); screenShake = 3;
                         } 
                         else if (data.type === 'shake') {
                             screenShake = data.intensity;
                         }
                     });
 
-                    connection.on('close', () => { alert("Host oyunu kapattı."); location.reload(); });
-                    
-                    // DÜZELTİLEN YER: Bağlantı başarılı oldu, Menüyü Kapat ve Oyna!
-                    startOnlineGame(); 
+                    connection.on('close', () => { alert("Host ayrıldı."); location.reload(); });
+                    startMatch(); 
                 });
                 
-                connection.on('error', (err) => {
-                    alert("Bağlantı hatası veya oda bulunamadı!");
-                    document.getElementById('btn-join-room').innerText = "Bağlan (Misafir)";
+                connection.on('error', () => {
+                    alert("Oda bulunamadı!");
+                    document.getElementById('btn-join-room').innerText = "Bağlan";
                 });
             });
         });
 
-        // Oyunu Ortak Başlatma Fonksiyonu
-        function startOnlineGame() {
+        // Ortak Başlatma
+        function startMatch() {
+            player.score = 0; enemy.score = 0;
+            document.getElementById("player-score").innerText = player.score;
+            document.getElementById("enemy-score").innerText = enemy.score;
             document.getElementById('start-menu').classList.add('hidden');
+            
+            if (gameMode === "ai" || isHost) resetPuck('center'); // İlk başlangıç merkezden
             gameState = "playing";
-            if (isHost) resetPuck('player');
         }
 
-        // Rövanş Sistemi (Sadece Host basabilir)
+        // Rövanş ve Ana Menü
         document.getElementById('restart-btn').addEventListener('click', () => {
-            if (isHost) {
+            if (gameMode === "ai" || isHost) {
                 document.getElementById('game-over-menu').classList.add('hidden');
                 player.score = 0; enemy.score = 0;
-                resetPuck('player');
-                gameState = "playing"; // Bu state guest'e gidince onun menüsü de otomatik kapanır
+                resetPuck('center');
+                gameState = "playing"; 
             }
+        });
+
+        document.getElementById('main-menu-btn').addEventListener('click', () => {
+            location.reload(); // Ana menüye dönmek için sayfayı yenile
         });
 
         function showGameOver() {
@@ -345,36 +424,33 @@
             const title = document.getElementById('game-over-title');
             const restartBtn = document.getElementById('restart-btn');
             
-            let hostWon = player.score >= targetScore;
-            let iWon = (isHost && hostWon) || (isGuest && !hostWon);
-
-            if (iWon) {
-                title.innerText = "KAZANDIN! 🏆";
-                title.style.color = isHost ? "var(--player-color)" : "var(--ai-color)";
-            } else {
-                title.innerText = "KAYBETTİN! 💻";
-                title.style.color = isHost ? "var(--ai-color)" : "var(--player-color)";
-            }
+            let playerWon = player.score >= targetScore;
             
-            document.getElementById('final-score-text').innerText = `MAVİ ${player.score} - ${enemy.score} KIRMIZI`;
-            
-            if (isHost) {
-                restartBtn.disabled = false;
-                restartBtn.innerText = "Rövanş Başlat";
-                restartBtn.style.opacity = "1";
+            if (gameMode === "ai") {
+                title.innerText = playerWon ? "KAZANDIN! 🏆" : "KAYBETTİN! 💻";
+                title.style.color = playerWon ? "var(--player-color)" : "var(--enemy-color)";
+                document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${enemy.score} A.I.`;
+                restartBtn.innerText = "Tekrar Oyna";
             } else {
-                restartBtn.disabled = true;
-                restartBtn.innerText = "Host'un Başlatması Bekleniyor...";
-                restartBtn.style.opacity = "0.5";
-                restartBtn.style.cursor = "default";
+                let iWon = (isHost && playerWon) || (isGuest && !playerWon);
+                title.innerText = iWon ? "KAZANDIN! 🏆" : "KAYBETTİN! 🥺";
+                title.style.color = iWon ? "var(--player-color)" : "var(--enemy-color)";
+                
+                let mySc = isHost ? player.score : enemy.score;
+                let opSc = isHost ? enemy.score : player.score;
+                document.getElementById('final-score-text').innerText = `Sen ${mySc} - ${opSc} Rakip`;
+                
+                if (isHost) {
+                    restartBtn.disabled = false; restartBtn.innerText = "Rövanş Başlat"; restartBtn.style.opacity = "1";
+                } else {
+                    restartBtn.disabled = true; restartBtn.innerText = "Host Bekleniyor..."; restartBtn.style.opacity = "0.5";
+                }
             }
         }
 
-        // --- GÖRSEL EFEKTLER VE ÇİZİM ---
+        // --- GÖRSEL EFEKTLER ---
         function createSparks(x, y, color) {
-            for(let i=0; i<5; i++) {
-                sparks.push({ x: x, y: y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, alpha: 1, color: color });
-            }
+            for(let i=0; i<5; i++) { sparks.push({ x: x, y: y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, alpha: 1, color: color }); }
         }
 
         function drawSparks() {
@@ -390,23 +466,13 @@
 
         function drawSaha() {
             ctx.shadowBlur = 0; 
-            ctx.beginPath(); ctx.arc(canvas.width / 2, 0, 80, 0, Math.PI); 
-            ctx.strokeStyle = "rgba(239, 68, 68, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
-            
-            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height, 80, Math.PI, Math.PI * 2); 
-            ctx.strokeStyle = "rgba(59, 130, 246, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
-
-            ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2);
-            ctx.strokeStyle = "rgba(148, 163, 184, 0.5)"; ctx.lineWidth = 4; ctx.stroke();
-
+            ctx.beginPath(); ctx.arc(canvas.width / 2, 0, 80, 0, Math.PI); ctx.strokeStyle = "rgba(239, 68, 68, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
+            ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height, 80, Math.PI, Math.PI * 2); ctx.strokeStyle = "rgba(59, 130, 246, 0.2)"; ctx.lineWidth = 3; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2); ctx.strokeStyle = "rgba(148, 163, 184, 0.5)"; ctx.lineWidth = 4; ctx.stroke();
             ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 6, 0, Math.PI * 2); ctx.fillStyle = "rgba(148, 163, 184, 0.5)"; ctx.fill();
-
-            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 12); 
-            ctx.fillStyle = "rgba(239, 68, 68, 0.8)"; ctx.fill();
-
-            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 12, goalWidth, 12); 
-            ctx.fillStyle = "rgba(59, 130, 246, 0.8)"; ctx.fill();
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, 0, goalWidth, 12); ctx.fillStyle = "rgba(239, 68, 68, 0.8)"; ctx.fill();
+            ctx.beginPath(); ctx.rect((canvas.width - goalWidth) / 2, canvas.height - 12, goalWidth, 12); ctx.fillStyle = "rgba(59, 130, 246, 0.8)"; ctx.fill();
         }
 
         function drawPuckTrail() {
@@ -422,20 +488,16 @@
             ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
             ctx.fillStyle = obj.color; ctx.fill();
             ctx.shadowBlur = 0; 
-
             if (!isPuck) {
-                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.4, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fill();
-                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.2, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fill();
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.4, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fill();
+                ctx.beginPath(); ctx.arc(obj.x, obj.y, obj.radius * 0.2, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fill();
             }
         }
 
-        // --- FİZİK (SADECE HOST ÇALIŞTIRIR) ---
+        // --- FİZİK (SADECE HOST VEYA AI ÇALIŞTIRIR) ---
         function checkCollision(obj, p) {
             let dx = p.x - obj.x; let dy = p.y - obj.y;
             let distance = Math.sqrt(dx * dx + dy * dy);
-
             if (distance < obj.radius + p.radius) {
                 let angle = Math.atan2(dy, dx);
                 let sin = Math.sin(angle); let cos = Math.cos(angle);
@@ -445,9 +507,7 @@
                 p.x = Math.max(p.radius, Math.min(canvas.width - p.radius, p.x));
                 p.y = Math.max(p.radius, Math.min(canvas.height - p.radius, p.y));
                 
-                let forceRatio = 0.85; 
-                let bounceBoost = 5; 
-                
+                let forceRatio = 0.85; let bounceBoost = 5; 
                 p.vx += obj.vx * forceRatio + (cos * bounceBoost);
                 p.vy += obj.vy * forceRatio + (sin * bounceBoost);
 
@@ -459,29 +519,27 @@
                 if(currentSpeed > 12) {
                     screenShake = 2; 
                     createSparks(p.x - cos*p.radius, p.y - sin*p.radius, obj.color);
-                    // Efekti guest'e de yansıt
-                    if (isHost && connection) {
-                        connection.send({ type: 'spark', x: p.x - cos*p.radius, y: p.y - sin*p.radius, color: obj.color });
-                    }
+                    if (isHost && connection) connection.send({ type: 'spark', x: p.x - cos*p.radius, y: p.y - sin*p.radius, color: obj.color });
                 }
             }
         }
 
-        function resetPuck(scorer) {
+        function resetPuck(mode) {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
-            puck.vx = 0; puck.vy = scorer === 'player' ? -5 : 5; 
+            // YENİ: Başlangıç her zaman merkezden ve sıfır hızla (Adil başlama)
+            puck.vx = 0; puck.vy = 0; 
             puck.trail = []; 
             
             player.x = canvas.width / 2; player.y = canvas.height - 50;
             enemy.x = canvas.width / 2; enemy.y = 50;
             
-            // Eğer host isem drag hedefini kendi yerime, guest isem kendi yerime çek
-            if(isHost) dragTarget = { x: player.x, y: player.y }; 
-            if(isGuest) dragTarget = { x: enemy.x, y: enemy.y }; 
+            if(gameMode === "ai" || isHost) dragTarget = { x: player.x, y: player.y }; 
+            // Guest'in ters çevrilmiş dünyasında hedefi ayarla
+            if(isGuest) dragTarget = { x: player.x, y: player.y }; 
         }
 
         function handleGoal(scorer) {
-            if (!isHost) return; // Gol mantığını sadece Otoriter Host değerlendirir
+            if (isGuest) return; 
             
             gameState = "scored";
             screenShake = 6; 
@@ -489,10 +547,10 @@
             
             if (scorer === 'player') {
                 player.score++;
-                goalMessage = "GOL! (MAVİ)";
+                goalMessage = "GOL!";
             } else {
                 enemy.score++;
-                goalMessage = "GOL! (KIRMIZI)"; 
+                goalMessage = "GOL!"; 
             }
 
             if (player.score >= targetScore || enemy.score >= targetScore) {
@@ -502,7 +560,8 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    resetPuck(scorer === 'player' ? 'enemy' : 'player');
+                    // Golden sonra hep merkezde sabit başlıyor
+                    resetPuck('center');
                     gameState = "playing";
                 }, 1500);
             }
@@ -510,13 +569,15 @@
 
         // --- GÜNCELLENEN OYUN DÖNGÜSÜ ---
         function update() {
-            if (isHost) {
-                // 1. HOST Hareketi (Mavi - Alt)
+            if (gameMode === "ai" || isHost) {
+                // 1. HOST / SEN Hareketi (Mavi - Alt)
                 if (isDragging) {
                     let dx = dragTarget.x - player.x; let dy = dragTarget.y - player.y;
                     player.vx = dx * 0.4; player.vy = dy * 0.4;
                 } else {
                     player.vx = 0; player.vy = 0;
+                    
+                    // Klavye Kontrolleri (Host ve AI Düz oynar)
                     if (keys.left) player.vx = -player.speed; if (keys.right) player.vx = player.speed;
                     if (keys.up) player.vy = -player.speed; if (keys.down) player.vy = player.speed;
                 }
@@ -525,7 +586,33 @@
                 player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
                 player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
 
-                // 2. FİZİK VE DİSK (Sadece Host Yapar)
+                // 2. ENEMY (AI) Hareketi
+                if (gameMode === "ai") {
+                    let inCorner = puck.y < 80 && (puck.x < 80 || puck.x > canvas.width - 80);
+                    if (inCorner) { cornerTimer += 16.6; if (cornerTimer >= 2000) aiRetreating = true; } 
+                    else { cornerTimer = 0; }
+
+                    if (aiRetreating) {
+                        let targetX = canvas.width / 2; let targetY = 180; 
+                        if (enemy.x < targetX - 5) enemy.vx = enemy.speed; else if (enemy.x > targetX + 5) enemy.vx = -enemy.speed; else enemy.vx = 0;
+                        if (enemy.y < targetY - 5) enemy.vy = enemy.speed; else if (enemy.y > targetY + 5) enemy.vy = -enemy.speed; else enemy.vy = 0;
+                        if (Math.abs(enemy.x - targetX) <= 10 && Math.abs(enemy.y - targetY) <= 10) { aiRetreating = false; cornerTimer = 0; }
+                    } else {
+                        let aiTargetX = puck.x;
+                        if (puck.y < canvas.height / 2) {
+                            if (enemy.x < aiTargetX - 10) enemy.vx = enemy.speed; else if (enemy.x > aiTargetX + 10) enemy.vx = -enemy.speed; else enemy.vx = 0;
+                            if (enemy.y < puck.y - 15) enemy.vy = enemy.speed; else if (enemy.y > puck.y + 15) enemy.vy = -enemy.speed; else enemy.vy = 0;
+                        } else {
+                            if (enemy.x < canvas.width / 2 - 10) enemy.vx = enemy.speed * 0.5; else if (enemy.x > canvas.width / 2 + 10) enemy.vx = -enemy.speed * 0.5; else enemy.vx = 0;
+                            if (enemy.y > 60) enemy.vy = -enemy.speed * 0.5; else enemy.vy = 0;
+                        }
+                    }
+                    enemy.x += enemy.vx; enemy.y += enemy.vy;
+                    enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
+                    enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y));
+                }
+
+                // 3. FİZİK VE DİSK 
                 puck.trail.push({x: puck.x, y: puck.y});
                 if(puck.trail.length > 10) puck.trail.shift(); 
 
@@ -548,50 +635,48 @@
                 }
 
                 checkCollision(player, puck); 
-                checkCollision(enemy, puck); // Enemy koordinatları WebRTC'den geliyor
+                checkCollision(enemy, puck); 
 
-                // HOST, GUEST'E OYUN DÜNYASINI YOLLAR
-                if (connection) {
+                if (isHost && connection) {
                     connection.send({
                         type: 'state',
                         puck: { x: puck.x, y: puck.y },
                         player: { x: player.x, y: player.y },
                         score: { player: player.score, enemy: enemy.score },
-                        gameState: gameState,
-                        goalMessage: goalMessage
+                        gameState: gameState, goalMessage: goalMessage
                     });
                 }
                 
-                // Host skor tabelasını günceller
                 document.getElementById("player-score").innerText = player.score;
                 document.getElementById("enemy-score").innerText = enemy.score;
 
             } 
             else if (isGuest) {
-                // 1. GUEST Hareketi (Kırmızı - Üst)
+                // 1. GUEST Hareketi (Guest kendini aşağıda Mavi sanıyor, biz onu Üste Kırmızıya yansıtıyoruz)
                 if (isDragging) {
-                    let dx = dragTarget.x - enemy.x; let dy = dragTarget.y - enemy.y;
+                    // Guest ekranı ters olduğu için sürüklediği noktayı enemy koordinatlarına ters çevirerek iletiyoruz
+                    let dx = dragTarget.x - enemy.x; 
+                    
+                    // Y ekseni için canvas'ı ters çevir
+                    let invertedTargetY = canvas.height - dragTarget.y; 
+                    let dy = invertedTargetY - enemy.y;
+                    
                     enemy.vx = dx * 0.4; enemy.vy = dy * 0.4;
                 } else {
                     enemy.vx = 0; enemy.vy = 0;
-                    if (keys.left) enemy.vx = -enemy.speed; if (keys.right) enemy.vx = enemy.speed;
-                    if (keys.up) enemy.vy = -enemy.speed; if (keys.down) enemy.vy = enemy.speed;
+                    // Klavye Guest için Ters Çalışmalı (Aşağı basınca Üste gitmeli çünkü ekranı ters)
+                    if (keys.right) enemy.vx = -enemy.speed; if (keys.left) enemy.vx = enemy.speed;
+                    if (keys.down) enemy.vy = -enemy.speed; if (keys.up) enemy.vy = enemy.speed;
                 }
 
                 enemy.x += enemy.vx; enemy.y += enemy.vy;
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
-                enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y));
+                enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); // Enemy hep üstte
 
-                // GUEST, HOST'A SADECE KENDİ POZİSYONUNU YOLLAR
                 if (connection) {
-                    connection.send({
-                        type: 'input',
-                        x: enemy.x,
-                        y: enemy.y
-                    });
+                    connection.send({ type: 'input', x: enemy.x, y: enemy.y });
                 }
                 
-                // Guest için lokal disk izi efekti
                 puck.trail.push({x: puck.x, y: puck.y});
                 if(puck.trail.length > 10) puck.trail.shift(); 
             }
@@ -613,8 +698,7 @@
             drawPuckTrail();
             drawSparks();
             
-            // Eğer ikisi de seçilmemişse ekranda kimse yok gibi görünmesin, menü arkasında dursun
-            if(isHost || isGuest || gameState === "menu") {
+            if(isHost || isGuest || gameMode === "ai" || gameState === "menu") {
                 drawCircle(player);
                 drawCircle(enemy);
                 drawCircle(puck, true);
@@ -630,11 +714,21 @@
                 ctx.shadowBlur = 20; ctx.shadowColor = "white";
                 ctx.fillStyle = "white"; ctx.font = "900 42px 'Segoe UI'";
                 ctx.textAlign = "center"; ctx.textBaseline = "middle";
-                ctx.fillText(goalMessage, canvas.width / 2, canvas.height / 2 - 20);
-                
-                ctx.shadowBlur = 0;
-                ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
-                ctx.fillText(`Skor: ${player.score} - ${enemy.score}`, canvas.width / 2, canvas.height / 2 + 30);
+                // Guest ekranı ters döndüğü için yazıyı ters yazdırmalıyız ki ona düz görünsün
+                if (isGuest) {
+                    ctx.save();
+                    ctx.translate(canvas.width/2, canvas.height/2);
+                    ctx.rotate(Math.PI);
+                    ctx.fillText(goalMessage, 0, -20);
+                    ctx.shadowBlur = 0; ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
+                    // Host/Guest skor isimleri
+                    ctx.fillText(`Skor: ${enemy.score} - ${player.score}`, 0, 30);
+                    ctx.restore();
+                } else {
+                    ctx.fillText(goalMessage, canvas.width / 2, canvas.height / 2 - 20);
+                    ctx.shadowBlur = 0; ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
+                    ctx.fillText(`Skor: ${player.score} - ${enemy.score}`, canvas.width / 2, canvas.height / 2 + 30);
+                }
             }
 
             requestAnimationFrame(gameLoop);
