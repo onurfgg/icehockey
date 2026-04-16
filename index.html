@@ -184,7 +184,7 @@
         const canvasWrapper = document.getElementById("canvas-wrapper");
 
         // --- OYUN DEĞİŞKENLERİ ---
-        let gameMode = "ai"; // "ai" veya "online"
+        let gameMode = "ai"; 
         let myPeer = null;
         let connection = null;
         let isHost = false;
@@ -204,25 +204,27 @@
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // --- KUSURSUZ DOKUNMATİK / FARE KONTROLÜ (MİRRORED VIEW UYUMLU) ---
+        // --- KUSURSUZ DOKUNMATİK / FARE KONTROLÜ (BÜYÜK BUG ÇÖZÜLDÜ) ---
         function updateDragTarget(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             
-            let canvasX = (e.clientX - rect.left) * scaleX;
-            let canvasY = (e.clientY - rect.top) * scaleY;
+            let rawX = (e.clientX - rect.left) * scaleX;
+            let rawY = (e.clientY - rect.top) * scaleY;
 
-            // EĞER GUEST İSE (Canvas ters çevrildiği için koordinatları da tersine çevirmeliyiz)
-            if (isGuest) {
-                canvasX = canvas.width - canvasX;
-                canvasY = canvas.height - canvasY;
+            // EĞER GUEST İSE: CSS ile ekranı ters çevirdiğimiz için dokunmatik koordinatları 
+            // fiziksel canvas'ın doğru (üst) bölgesine hizalamalıyız.
+            let logicalX = isGuest ? canvas.width - rawX : rawX;
+            let logicalY = isGuest ? canvas.height - rawY : rawY;
+
+            if (isHost || gameMode === "ai") {
+                dragTarget.x = Math.max(22, Math.min(canvas.width - 22, logicalX)); 
+                dragTarget.y = Math.max(canvas.height / 2 + 22, Math.min(canvas.height - 22, logicalY));
+            } else if (isGuest) {
+                dragTarget.x = Math.max(22, Math.min(canvas.width - 22, logicalX)); 
+                dragTarget.y = Math.max(22, Math.min(canvas.height / 2 - 22, logicalY));
             }
-
-            // GUEST DE HOST DA ARTIK KENDİNİ AŞAĞIDA (Mavi tarafta) GÖRÜYOR!
-            // Bu yüzden herkes sadece ALT sahada (height/2 ile height arası) oynayabilir.
-            dragTarget.x = Math.max(22, Math.min(canvas.width - 22, canvasX)); 
-            dragTarget.y = Math.max(canvas.height / 2 + 22, Math.min(canvas.height - 22, canvasY));
         }
 
         canvas.addEventListener("pointerdown", (e) => { 
@@ -260,12 +262,12 @@
             color: "#1e293b", maxSpeed: 23, friction: 0.985, trail: [] 
         };
 
-        const player = { // ALT OYUNCU (Host veya AI Modunda Sen)
+        const player = { 
             x: canvas.width / 2, y: canvas.height - 50,
             radius: 22, mass: 5, vx: 0, vy: 0, speed: 7, color: "#3b82f6", score: 0
         };
 
-        const enemy = { // ÜST OYUNCU (Guest veya A.I.)
+        const enemy = { 
             x: canvas.width / 2, y: 50,
             radius: 22, mass: 5, vx: 0, vy: 0, speed: 4.5, color: "#ef4444", score: 0
         };
@@ -273,8 +275,6 @@
         const goalWidth = 130; 
 
         // --- MENÜ BUTONLARI ---
-        
-        // A.I. İle Oyna
         document.getElementById('btn-play-ai').addEventListener('click', () => {
             gameMode = "ai";
             enemy.speed = parseFloat(document.getElementById('difficulty-select').value);
@@ -282,12 +282,11 @@
             
             document.getElementById('enemy-label').innerText = "A.I. Model";
             document.getElementById('player-label').innerText = "Sen";
-            canvasWrapper.classList.remove('mirrored-view'); // AI modunda her zaman düz bakıyoruz
+            canvasWrapper.classList.remove('mirrored-view'); 
             
             startMatch();
         });
 
-        // Odaya Gir Menüsünü Aç
         document.getElementById('btn-show-join').addEventListener('click', () => {
             document.getElementById('mode-selection').classList.add('hidden-group');
             document.getElementById('join-room-section').classList.remove('hidden-group');
@@ -300,7 +299,7 @@
 
         function generateShortId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
 
-        // Host (Kurucu) Ol
+        // Host Ol
         document.getElementById('btn-create-room').addEventListener('click', () => {
             gameMode = "online";
             targetScore = parseInt(document.getElementById('target-score-select').value);
@@ -309,7 +308,7 @@
             
             document.getElementById('enemy-label').innerText = "Guest";
             document.getElementById('player-label').innerText = "Host (Sen)";
-            canvasWrapper.classList.remove('mirrored-view'); // Host düz bakar
+            canvasWrapper.classList.remove('mirrored-view'); 
 
             let customId = generateShortId();
             myPeer = new Peer(customId);
@@ -334,7 +333,7 @@
             myPeer.on('error', () => { document.getElementById('room-code-display').innerText = "HATA"; });
         });
 
-        // Guest (Misafir) Katıl
+        // Guest Katıl
         document.getElementById('btn-join-room').addEventListener('click', () => {
             let code = document.getElementById('room-id-input').value.trim().toUpperCase();
             if (!code) return;
@@ -342,8 +341,6 @@
             document.getElementById('btn-join-room').innerText = "Bağlanıyor...";
             gameMode = "online";
             
-            // GUEST EKRANINI TERS ÇEVİRİYORUZ!
-            // Guest kendini aşağıda (mavi) hissedecek. 
             document.getElementById('enemy-label').innerText = "Host";
             document.getElementById('player-label').innerText = "Guest (Sen)";
             canvasWrapper.classList.add('mirrored-view'); 
@@ -354,9 +351,8 @@
                 
                 connection.on('open', () => {
                     isGuest = true;
-                    // Sürükleme hedefini misafir için "Masa Üstündeki" Mavi Tokmağın alanına (Altta) ayarla
-                    // Çünkü o ekranı ters görüyor! Onun için Alt taraf aslında bizim fizik motorumuzdaki Üst taraf (enemy.y = 50)
-                    dragTarget = { x: enemy.x, y: canvas.height - enemy.y }; 
+                    // Sürükleme hedefini Guest'in düşman tokmağı olarak belirle
+                    dragTarget = { x: enemy.x, y: enemy.y }; 
                     
                     connection.on('data', (data) => {
                         if (data.type === 'state') {
@@ -369,7 +365,11 @@
                                 goalMessage = data.goalMessage;
                                 
                                 if (gameState === "gameover") showGameOver();
-                                else if (gameState === "playing") document.getElementById('game-over-menu').classList.add('hidden');
+                                else if (gameState === "playing") {
+                                    document.getElementById('game-over-menu').classList.add('hidden');
+                                    // Golden sonra Guest'in kendi tokmağını ekrana zıplatmaması için sıfırla
+                                    dragTarget = { x: canvas.width / 2, y: 50 }; 
+                                }
                             }
                             
                             document.getElementById("player-score").innerText = player.score;
@@ -401,7 +401,7 @@
             document.getElementById("enemy-score").innerText = enemy.score;
             document.getElementById('start-menu').classList.add('hidden');
             
-            if (gameMode === "ai" || isHost) resetPuck('center'); // İlk başlangıç merkezden
+            if (gameMode === "ai" || isHost) resetPuck('player'); // İlk başlangıç
             gameState = "playing";
         }
 
@@ -410,13 +410,13 @@
             if (gameMode === "ai" || isHost) {
                 document.getElementById('game-over-menu').classList.add('hidden');
                 player.score = 0; enemy.score = 0;
-                resetPuck('center');
+                resetPuck('player');
                 gameState = "playing"; 
             }
         });
 
         document.getElementById('main-menu-btn').addEventListener('click', () => {
-            location.reload(); // Ana menüye dönmek için sayfayı yenile
+            location.reload(); 
         });
 
         function showGameOver() {
@@ -524,18 +524,17 @@
             }
         }
 
-        function resetPuck(mode) {
+        // YENİ: Top atana gider (Eski sistem), Oyuncular merkeze döner.
+        function resetPuck(scorer) {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
-            // YENİ: Başlangıç her zaman merkezden ve sıfır hızla (Adil başlama)
-            puck.vx = 0; puck.vy = 0; 
+            puck.vx = 0; puck.vy = scorer === 'player' ? -5 : 5; 
             puck.trail = []; 
             
             player.x = canvas.width / 2; player.y = canvas.height - 50;
             enemy.x = canvas.width / 2; enemy.y = 50;
             
             if(gameMode === "ai" || isHost) dragTarget = { x: player.x, y: player.y }; 
-            // Guest'in ters çevrilmiş dünyasında hedefi ayarla
-            if(isGuest) dragTarget = { x: player.x, y: player.y }; 
+            if(isGuest) dragTarget = { x: enemy.x, y: enemy.y }; 
         }
 
         function handleGoal(scorer) {
@@ -560,8 +559,8 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    // Golden sonra hep merkezde sabit başlıyor
-                    resetPuck('center');
+                    // Golden sonra gol yiyene top verilir ve oyuncular yerine döner
+                    resetPuck(scorer);
                     gameState = "playing";
                 }, 1500);
             }
@@ -570,14 +569,12 @@
         // --- GÜNCELLENEN OYUN DÖNGÜSÜ ---
         function update() {
             if (gameMode === "ai" || isHost) {
-                // 1. HOST / SEN Hareketi (Mavi - Alt)
+                // 1. HOST / SEN Hareketi
                 if (isDragging) {
                     let dx = dragTarget.x - player.x; let dy = dragTarget.y - player.y;
                     player.vx = dx * 0.4; player.vy = dy * 0.4;
                 } else {
                     player.vx = 0; player.vy = 0;
-                    
-                    // Klavye Kontrolleri (Host ve AI Düz oynar)
                     if (keys.left) player.vx = -player.speed; if (keys.right) player.vx = player.speed;
                     if (keys.up) player.vy = -player.speed; if (keys.down) player.vy = player.speed;
                 }
@@ -652,26 +649,20 @@
 
             } 
             else if (isGuest) {
-                // 1. GUEST Hareketi (Guest kendini aşağıda Mavi sanıyor, biz onu Üste Kırmızıya yansıtıyoruz)
+                // 1. GUEST Hareketi (Fiziksel tersleme olmadan tamamen doğru veri aktarımı)
                 if (isDragging) {
-                    // Guest ekranı ters olduğu için sürüklediği noktayı enemy koordinatlarına ters çevirerek iletiyoruz
                     let dx = dragTarget.x - enemy.x; 
-                    
-                    // Y ekseni için canvas'ı ters çevir
-                    let invertedTargetY = canvas.height - dragTarget.y; 
-                    let dy = invertedTargetY - enemy.y;
-                    
+                    let dy = dragTarget.y - enemy.y;
                     enemy.vx = dx * 0.4; enemy.vy = dy * 0.4;
                 } else {
                     enemy.vx = 0; enemy.vy = 0;
-                    // Klavye Guest için Ters Çalışmalı (Aşağı basınca Üste gitmeli çünkü ekranı ters)
                     if (keys.right) enemy.vx = -enemy.speed; if (keys.left) enemy.vx = enemy.speed;
                     if (keys.down) enemy.vy = -enemy.speed; if (keys.up) enemy.vy = enemy.speed;
                 }
 
                 enemy.x += enemy.vx; enemy.y += enemy.vy;
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
-                enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); // Enemy hep üstte
+                enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); 
 
                 if (connection) {
                     connection.send({ type: 'input', x: enemy.x, y: enemy.y });
@@ -714,14 +705,12 @@
                 ctx.shadowBlur = 20; ctx.shadowColor = "white";
                 ctx.fillStyle = "white"; ctx.font = "900 42px 'Segoe UI'";
                 ctx.textAlign = "center"; ctx.textBaseline = "middle";
-                // Guest ekranı ters döndüğü için yazıyı ters yazdırmalıyız ki ona düz görünsün
                 if (isGuest) {
                     ctx.save();
                     ctx.translate(canvas.width/2, canvas.height/2);
                     ctx.rotate(Math.PI);
                     ctx.fillText(goalMessage, 0, -20);
                     ctx.shadowBlur = 0; ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
-                    // Host/Guest skor isimleri
                     ctx.fillText(`Skor: ${enemy.score} - ${player.score}`, 0, 30);
                     ctx.restore();
                 } else {
