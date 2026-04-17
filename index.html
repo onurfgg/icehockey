@@ -39,7 +39,6 @@
         #player-score { color: var(--player-color); text-shadow: 0 0 10px var(--player-color); }
         #enemy-score { color: var(--enemy-color); text-shadow: 0 0 10px var(--enemy-color); }
         
-        /* OYUN ALANI KAPSAYICISI (Canvas'ı döndürmek için) */
         #canvas-wrapper {
             position: relative;
             transition: transform 0.5s ease-in-out;
@@ -51,10 +50,7 @@
             display: block;
         }
         
-        /* GUEST EKRANINI 180 DERECE ÇEVİREN SINIF */
-        .mirrored-view {
-            transform: rotate(180deg);
-        }
+        .mirrored-view { transform: rotate(180deg); }
 
         .controls-info { position: absolute; bottom: 20px; color: rgba(255, 255, 255, 0.5); font-size: 13px; letter-spacing: 1px; text-align: center; pointer-events: none; }
         .controls-info span { font-weight: bold; color: white; }
@@ -85,7 +81,6 @@
         .room-info { margin-top: 15px; font-size: 13px; color: #facc15; font-weight: bold; }
         .hidden-group { display: none !important; }
         
-        /* Mobil Uyum */
         @media screen and (max-width: 768px) {
             .social-container { top: 10px; left: 5vw; width: 90vw; justify-content: space-between; gap: 8px; }
             .social-btn { font-size: 11px; padding: 8px 5px; flex: 1; justify-content: center; }
@@ -110,6 +105,11 @@
             <h2>NEON AIR HOCKEY</h2>
             
             <div id="mode-selection">
+                <div class="setting-group">
+                    <label>Oyuncu Adı (Zorunlu Değil)</label>
+                    <input type="text" id="player-name-input" placeholder="Adınız" maxlength="12">
+                </div>
+                
                 <div class="setting-group">
                     <label>Hedef Skor</label>
                     <select id="target-score-select">
@@ -183,7 +183,6 @@
         const ctx = canvas.getContext("2d");
         const canvasWrapper = document.getElementById("canvas-wrapper");
 
-        // --- OYUN DEĞİŞKENLERİ ---
         let gameMode = "ai"; 
         let myPeer = null;
         let connection = null;
@@ -193,18 +192,23 @@
         let gameState = "menu"; 
         let targetScore = 5;
         let goalMessage = "";
+        
+        let myName = "";
+        let enemyName = "Rakip";
 
         let screenShake = 0;
         let sparks = [];
 
-        // A.I. Sıkışma Koruması
         let cornerTimer = 0;
         let aiRetreating = false;
 
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // --- KUSURSUZ DOKUNMATİK / FARE KONTROLÜ (BÜYÜK BUG ÇÖZÜLDÜ) ---
+        // Ağ optimizasyonu için veri gönderme kontrolü
+        let lastSentInput = { x: -1, y: -1 }; 
+
+        // --- DOKUNMATİK KONTROL (MİRRORED VIEW UYUMLU) ---
         function updateDragTarget(e) {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -213,8 +217,6 @@
             let rawX = (e.clientX - rect.left) * scaleX;
             let rawY = (e.clientY - rect.top) * scaleY;
 
-            // EĞER GUEST İSE: CSS ile ekranı ters çevirdiğimiz için dokunmatik koordinatları 
-            // fiziksel canvas'ın doğru (üst) bölgesine hizalamalıyız.
             let logicalX = isGuest ? canvas.width - rawX : rawX;
             let logicalY = isGuest ? canvas.height - rawY : rawY;
 
@@ -241,7 +243,7 @@
         const keys = { up: false, down: false, left: false, right: false };
         window.addEventListener("keydown", (e) => {
             let key = e.key.toLowerCase();
-            if (document.activeElement === document.getElementById('room-id-input')) return;
+            if (document.activeElement === document.getElementById('room-id-input') || document.activeElement === document.getElementById('player-name-input')) return;
             if (key === "w" || e.key === "ArrowUp") { keys.up = true; e.preventDefault(); }
             if (key === "s" || e.key === "ArrowDown") { keys.down = true; e.preventDefault(); }
             if (key === "a" || e.key === "ArrowLeft") { keys.left = true; e.preventDefault(); }
@@ -274,14 +276,23 @@
 
         const goalWidth = 130; 
 
+        // --- İSİM ALMA FONKSİYONU ---
+        function getMyName() {
+            let n = document.getElementById('player-name-input').value.trim();
+            return n === "" ? (isHost ? "Host" : (isGuest ? "Guest" : "Sen")) : n;
+        }
+
         // --- MENÜ BUTONLARI ---
         document.getElementById('btn-play-ai').addEventListener('click', () => {
             gameMode = "ai";
+            myName = getMyName();
+            enemyName = "A.I. Model";
+            
             enemy.speed = parseFloat(document.getElementById('difficulty-select').value);
             targetScore = parseInt(document.getElementById('target-score-select').value);
             
-            document.getElementById('enemy-label').innerText = "A.I. Model";
-            document.getElementById('player-label').innerText = "Sen";
+            document.getElementById('enemy-label').innerText = enemyName;
+            document.getElementById('player-label').innerText = myName + " (Sen)";
             canvasWrapper.classList.remove('mirrored-view'); 
             
             startMatch();
@@ -299,17 +310,13 @@
 
         function generateShortId() { return Math.random().toString(36).substring(2, 7).toUpperCase(); }
 
-        // Host Ol
+        // HOST OL
         document.getElementById('btn-create-room').addEventListener('click', () => {
             gameMode = "online";
             targetScore = parseInt(document.getElementById('target-score-select').value);
             document.getElementById('mode-selection').classList.add('hidden-group');
             document.getElementById('host-waiting').classList.remove('hidden-group');
             
-            document.getElementById('enemy-label').innerText = "Guest";
-            document.getElementById('player-label').innerText = "Host (Sen)";
-            canvasWrapper.classList.remove('mirrored-view'); 
-
             let customId = generateShortId();
             myPeer = new Peer(customId);
             
@@ -318,8 +325,21 @@
             myPeer.on('connection', (conn) => {
                 connection = conn;
                 isHost = true;
+                myName = getMyName();
                 
+                // Host, bağlanan Guest'e kendi ismini ve kuralları (Hedef skor) yollar
+                connection.on('open', () => {
+                    connection.send({ type: 'handshake', name: myName, targetScore: targetScore });
+                });
+
                 connection.on('data', (data) => {
+                    if (data.type === 'handshake') {
+                        enemyName = data.name || "Guest";
+                        document.getElementById('enemy-label').innerText = enemyName;
+                        document.getElementById('player-label').innerText = myName + " (Sen)";
+                        canvasWrapper.classList.remove('mirrored-view'); 
+                        startMatch();
+                    }
                     if (data.type === 'input') {
                         enemy.x = data.x;
                         enemy.y = data.y;
@@ -327,23 +347,19 @@
                 });
 
                 connection.on('close', () => { alert("Misafir ayrıldı."); location.reload(); });
-                startMatch();
             });
             
             myPeer.on('error', () => { document.getElementById('room-code-display').innerText = "HATA"; });
         });
 
-        // Guest Katıl
+        // GUEST KATIL
         document.getElementById('btn-join-room').addEventListener('click', () => {
             let code = document.getElementById('room-id-input').value.trim().toUpperCase();
             if (!code) return;
             
             document.getElementById('btn-join-room').innerText = "Bağlanıyor...";
             gameMode = "online";
-            
-            document.getElementById('enemy-label').innerText = "Host";
-            document.getElementById('player-label').innerText = "Guest (Sen)";
-            canvasWrapper.classList.add('mirrored-view'); 
+            myName = getMyName();
 
             myPeer = new Peer();
             myPeer.on('open', () => {
@@ -351,11 +367,22 @@
                 
                 connection.on('open', () => {
                     isGuest = true;
-                    // Sürükleme hedefini Guest'in düşman tokmağı olarak belirle
                     dragTarget = { x: enemy.x, y: enemy.y }; 
                     
+                    // Guest, Host'a kendi ismini yollar
+                    connection.send({ type: 'handshake', name: myName });
+                    
                     connection.on('data', (data) => {
-                        if (data.type === 'state') {
+                        // Host'un ismini ve skor sınırını al
+                        if (data.type === 'handshake') {
+                            enemyName = data.name || "Host";
+                            targetScore = data.targetScore;
+                            document.getElementById('enemy-label').innerText = enemyName;
+                            document.getElementById('player-label').innerText = myName + " (Sen)";
+                            canvasWrapper.classList.add('mirrored-view'); // Guest ekranı döndürülür
+                            startMatch();
+                        }
+                        else if (data.type === 'state') {
                             puck.x = data.puck.x; puck.y = data.puck.y;
                             player.x = data.player.x; player.y = data.player.y;
                             player.score = data.score.player; enemy.score = data.score.enemy;
@@ -367,11 +394,9 @@
                                 if (gameState === "gameover") showGameOver();
                                 else if (gameState === "playing") {
                                     document.getElementById('game-over-menu').classList.add('hidden');
-                                    // Golden sonra Guest'in kendi tokmağını ekrana zıplatmaması için sıfırla
                                     dragTarget = { x: canvas.width / 2, y: 50 }; 
                                 }
                             }
-                            
                             document.getElementById("player-score").innerText = player.score;
                             document.getElementById("enemy-score").innerText = enemy.score;
                         } 
@@ -384,7 +409,6 @@
                     });
 
                     connection.on('close', () => { alert("Host ayrıldı."); location.reload(); });
-                    startMatch(); 
                 });
                 
                 connection.on('error', () => {
@@ -394,30 +418,26 @@
             });
         });
 
-        // Ortak Başlatma
         function startMatch() {
             player.score = 0; enemy.score = 0;
             document.getElementById("player-score").innerText = player.score;
             document.getElementById("enemy-score").innerText = enemy.score;
             document.getElementById('start-menu').classList.add('hidden');
             
-            if (gameMode === "ai" || isHost) resetPuck('player'); // İlk başlangıç
+            if (gameMode === "ai" || isHost) resetPuck(); 
             gameState = "playing";
         }
 
-        // Rövanş ve Ana Menü
         document.getElementById('restart-btn').addEventListener('click', () => {
             if (gameMode === "ai" || isHost) {
                 document.getElementById('game-over-menu').classList.add('hidden');
                 player.score = 0; enemy.score = 0;
-                resetPuck('player');
+                resetPuck();
                 gameState = "playing"; 
             }
         });
 
-        document.getElementById('main-menu-btn').addEventListener('click', () => {
-            location.reload(); 
-        });
+        document.getElementById('main-menu-btn').addEventListener('click', () => { location.reload(); });
 
         function showGameOver() {
             document.getElementById('game-over-menu').classList.remove('hidden');
@@ -429,7 +449,7 @@
             if (gameMode === "ai") {
                 title.innerText = playerWon ? "KAZANDIN! 🏆" : "KAYBETTİN! 💻";
                 title.style.color = playerWon ? "var(--player-color)" : "var(--enemy-color)";
-                document.getElementById('final-score-text').innerText = `Sen ${player.score} - ${enemy.score} A.I.`;
+                document.getElementById('final-score-text').innerText = `${myName} ${player.score} - ${enemy.score} ${enemyName}`;
                 restartBtn.innerText = "Tekrar Oyna";
             } else {
                 let iWon = (isHost && playerWon) || (isGuest && !playerWon);
@@ -438,7 +458,7 @@
                 
                 let mySc = isHost ? player.score : enemy.score;
                 let opSc = isHost ? enemy.score : player.score;
-                document.getElementById('final-score-text').innerText = `Sen ${mySc} - ${opSc} Rakip`;
+                document.getElementById('final-score-text').innerText = `${myName} ${mySc} - ${opSc} ${enemyName}`;
                 
                 if (isHost) {
                     restartBtn.disabled = false; restartBtn.innerText = "Rövanş Başlat"; restartBtn.style.opacity = "1";
@@ -450,7 +470,7 @@
 
         // --- GÖRSEL EFEKTLER ---
         function createSparks(x, y, color) {
-            for(let i=0; i<5; i++) { sparks.push({ x: x, y: y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, alpha: 1, color: color }); }
+            for(let i=0; i<4; i++) { sparks.push({ x: x, y: y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5, alpha: 1, color: color }); }
         }
 
         function drawSparks() {
@@ -458,7 +478,7 @@
                 let s = sparks[i];
                 ctx.beginPath(); ctx.arc(s.x, s.y, 2.5, 0, Math.PI*2);
                 ctx.fillStyle = s.color; ctx.globalAlpha = s.alpha; ctx.fill();
-                s.x += s.vx; s.y += s.vy; s.alpha -= 0.08;
+                s.x += s.vx; s.y += s.vy; s.alpha -= 0.1;
                 if(s.alpha <= 0) sparks.splice(i, 1);
             }
             ctx.globalAlpha = 1.0;
@@ -494,7 +514,7 @@
             }
         }
 
-        // --- FİZİK (SADECE HOST VEYA AI ÇALIŞTIRIR) ---
+        // --- FİZİK (HOST / AI) ---
         function checkCollision(obj, p) {
             let dx = p.x - obj.x; let dy = p.y - obj.y;
             let distance = Math.sqrt(dx * dx + dy * dy);
@@ -524,10 +544,10 @@
             }
         }
 
-        // YENİ: Top atana gider (Eski sistem), Oyuncular merkeze döner.
-        function resetPuck(scorer) {
+        // Gol ve Başlangıç sonrası merkezde sıfırlanma
+        function resetPuck() {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
-            puck.vx = 0; puck.vy = scorer === 'player' ? -5 : 5; 
+            puck.vx = 0; puck.vy = 0; 
             puck.trail = []; 
             
             player.x = canvas.width / 2; player.y = canvas.height - 50;
@@ -546,10 +566,10 @@
             
             if (scorer === 'player') {
                 player.score++;
-                goalMessage = "GOL!";
+                goalMessage = `GOL! (${isHost ? myName : myName})`; 
             } else {
                 enemy.score++;
-                goalMessage = "GOL!"; 
+                goalMessage = `GOL! (${enemyName})`; 
             }
 
             if (player.score >= targetScore || enemy.score >= targetScore) {
@@ -559,8 +579,7 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    // Golden sonra gol yiyene top verilir ve oyuncular yerine döner
-                    resetPuck(scorer);
+                    resetPuck(); // Her zaman merkeze sıfırla
                     gameState = "playing";
                 }, 1500);
             }
@@ -569,7 +588,6 @@
         // --- GÜNCELLENEN OYUN DÖNGÜSÜ ---
         function update() {
             if (gameMode === "ai" || isHost) {
-                // 1. HOST / SEN Hareketi
                 if (isDragging) {
                     let dx = dragTarget.x - player.x; let dy = dragTarget.y - player.y;
                     player.vx = dx * 0.4; player.vy = dy * 0.4;
@@ -583,7 +601,6 @@
                 player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
                 player.y = Math.max(canvas.height / 2 + player.radius, Math.min(canvas.height - player.radius, player.y));
 
-                // 2. ENEMY (AI) Hareketi
                 if (gameMode === "ai") {
                     let inCorner = puck.y < 80 && (puck.x < 80 || puck.x > canvas.width - 80);
                     if (inCorner) { cornerTimer += 16.6; if (cornerTimer >= 2000) aiRetreating = true; } 
@@ -609,9 +626,8 @@
                     enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y));
                 }
 
-                // 3. FİZİK VE DİSK 
                 puck.trail.push({x: puck.x, y: puck.y});
-                if(puck.trail.length > 10) puck.trail.shift(); 
+                if(puck.trail.length > 8) puck.trail.shift(); 
 
                 puck.vx *= puck.friction; puck.vy *= puck.friction;
                 puck.x += puck.vx; puck.y += puck.vy;
@@ -634,11 +650,12 @@
                 checkCollision(player, puck); 
                 checkCollision(enemy, puck); 
 
+                // NETWORK OPTİMİZASYONU: Host veriyi her karede yollar (Puck'ı pürüzsüz görmek için bu gerekli)
                 if (isHost && connection) {
                     connection.send({
                         type: 'state',
-                        puck: { x: puck.x, y: puck.y },
-                        player: { x: player.x, y: player.y },
+                        puck: { x: Math.round(puck.x), y: Math.round(puck.y) },
+                        player: { x: Math.round(player.x), y: Math.round(player.y) },
                         score: { player: player.score, enemy: enemy.score },
                         gameState: gameState, goalMessage: goalMessage
                     });
@@ -649,7 +666,6 @@
 
             } 
             else if (isGuest) {
-                // 1. GUEST Hareketi (Fiziksel tersleme olmadan tamamen doğru veri aktarımı)
                 if (isDragging) {
                     let dx = dragTarget.x - enemy.x; 
                     let dy = dragTarget.y - enemy.y;
@@ -664,12 +680,16 @@
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
                 enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); 
 
+                // NETWORK OPTİMİZASYONU: Guest sadece pozisyonu DEĞİŞTİĞİNDE (1px den fazla fark varsa) veri yollar
                 if (connection) {
-                    connection.send({ type: 'input', x: enemy.x, y: enemy.y });
+                    if (Math.abs(lastSentInput.x - enemy.x) > 1 || Math.abs(lastSentInput.y - enemy.y) > 1) {
+                        connection.send({ type: 'input', x: Math.round(enemy.x), y: Math.round(enemy.y) });
+                        lastSentInput = { x: enemy.x, y: enemy.y };
+                    }
                 }
                 
                 puck.trail.push({x: puck.x, y: puck.y});
-                if(puck.trail.length > 10) puck.trail.shift(); 
+                if(puck.trail.length > 8) puck.trail.shift(); 
             }
         }
 
@@ -703,7 +723,7 @@
                 ctx.fillStyle = "rgba(15, 23, 42, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 ctx.shadowBlur = 20; ctx.shadowColor = "white";
-                ctx.fillStyle = "white"; ctx.font = "900 42px 'Segoe UI'";
+                ctx.fillStyle = "white"; ctx.font = "900 36px 'Segoe UI'";
                 ctx.textAlign = "center"; ctx.textBaseline = "middle";
                 if (isGuest) {
                     ctx.save();
