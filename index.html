@@ -83,6 +83,7 @@
         .room-info { margin-top: 15px; font-size: 13px; color: #facc15; font-weight: bold; }
         .hidden-group { display: none !important; }
         
+        /* Mobil Uyum */
         @media screen and (max-width: 768px) {
             .social-container { top: 10px; left: 5vw; width: 90vw; justify-content: space-between; gap: 8px; }
             .social-btn { font-size: 11px; padding: 8px 5px; flex: 1; justify-content: center; }
@@ -207,7 +208,7 @@
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // NETWORK OPTİMİZASYON DEĞİŞKENLERİ (Lagı çözen yapı)
+        // Ağ optimizasyonu için veri gönderme kontrolü
         let lastSentInput = { x: -1, y: -1 }; 
         let lastNetUpdate = 0;
         let lastGuestNetUpdate = 0;
@@ -280,18 +281,23 @@
 
         const goalWidth = 130; 
 
+        // --- İSİM ALMA FONKSİYONU ---
+        function getMyName() {
+            let n = document.getElementById('player-name-input').value.trim();
+            return n === "" ? (isHost ? "Host" : (isGuest ? "Guest" : "Sen")) : n;
+        }
+
         // --- MENÜ BUTONLARI ---
         document.getElementById('btn-play-ai').addEventListener('click', () => {
             gameMode = "ai";
-            let inputName = document.getElementById('player-name-input').value.trim();
-            myName = inputName === "" ? "Sen" : inputName;
+            myName = getMyName();
             enemyName = "A.I. Model";
             
             enemy.speed = parseFloat(document.getElementById('difficulty-select').value);
             targetScore = parseInt(document.getElementById('target-score-select').value);
             
             document.getElementById('enemy-label').innerText = enemyName;
-            document.getElementById('player-label').innerText = myName;
+            document.getElementById('player-label').innerText = myName + " (Sen)";
             canvasWrapper.classList.remove('mirrored-view'); 
             
             startMatch();
@@ -337,8 +343,8 @@
                     if (data.type === 'handshake') {
                         // Host Guest'in ismini alır
                         enemyName = data.name || "Guest";
-                        document.getElementById('enemy-label').innerText = enemyName; // Kırmızı (Üst) Rakip
-                        document.getElementById('player-label').innerText = myName + " (Sen)"; // Mavi (Alt) Biziz
+                        document.getElementById('enemy-label').innerText = enemyName; 
+                        document.getElementById('player-label').innerText = myName + " (Sen)"; 
                         canvasWrapper.classList.remove('mirrored-view'); 
                         startMatch();
                     }
@@ -385,10 +391,10 @@
                             document.getElementById('enemy-label').innerText = myName + " (Sen)"; 
                             document.getElementById('player-label').innerText = enemyName; 
                             
-                            canvasWrapper.classList.add('mirrored-view'); 
+                            canvasWrapper.classList.add('mirrored-view'); // Guest ekranı döndürülür
                             startMatch();
                         }
-                        else if (data.type === 's') { // Optimize edilmiş durum paketi (s)
+                        else if (data.type === 's') {
                             puck.x = data.px; puck.y = data.py;
                             player.x = data.hx; player.y = data.hy;
                             player.score = data.sp; enemy.score = data.se;
@@ -430,7 +436,7 @@
             document.getElementById("enemy-score").innerText = enemy.score;
             document.getElementById('start-menu').classList.add('hidden');
             
-            if (gameMode === "ai" || isHost) resetPuck(); 
+            if (gameMode === "ai" || isHost) resetPuck('player'); 
             gameState = "playing";
         }
 
@@ -438,7 +444,7 @@
             if (gameMode === "ai" || isHost) {
                 document.getElementById('game-over-menu').classList.add('hidden');
                 player.score = 0; enemy.score = 0;
-                resetPuck();
+                resetPuck('player');
                 gameState = "playing"; 
             }
         });
@@ -551,9 +557,11 @@
             }
         }
 
-        function resetPuck() {
+        // DÜZELTİLDİ: Tokmaklar yerine döner, Top gol atana/yiyene fırlatılır
+        function resetPuck(scorer = 'player') {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
-            puck.vx = 0; puck.vy = 0; 
+            puck.vx = 0; 
+            puck.vy = scorer === 'player' ? -5 : 5; 
             puck.trail = []; 
             
             player.x = canvas.width / 2; player.y = canvas.height - 50;
@@ -572,10 +580,10 @@
             
             if (scorer === 'player') {
                 player.score++;
-                goalMessage = `GOL! (${myName.toUpperCase()})`; 
+                goalMessage = `GOL! (${isHost ? myName : myName})`; 
             } else {
                 enemy.score++;
-                goalMessage = `GOL! (${enemyName.toUpperCase()})`; 
+                goalMessage = `GOL! (${enemyName})`; 
             }
 
             if (player.score >= targetScore || enemy.score >= targetScore) {
@@ -585,13 +593,14 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    resetPuck(); 
+                    // DÜZELTİLDİ: resetPuck'a golü atan gönderilir, böylece top saniyede harekete başlar
+                    resetPuck(scorer); 
                     gameState = "playing";
                 }, 1500);
             }
         }
 
-        // --- GÜNCELLENEN OYUN DÖNGÜSÜ (LAG YOK EDİLDİ) ---
+        // --- GÜNCELLENEN OYUN DÖNGÜSÜ ---
         function update() {
             let now = Date.now();
 
@@ -658,10 +667,9 @@
                 checkCollision(player, puck); 
                 checkCollision(enemy, puck); 
 
-                // AĞ OPTİMİZASYONU: Sadece 30ms'de bir gönder (Ping'i öldürür) ve paket ismini küçült
                 if (isHost && connection && (now - lastNetUpdate > 30)) {
                     connection.send({
-                        type: 's', // state
+                        type: 's', 
                         px: Math.round(puck.x), py: Math.round(puck.y),
                         hx: Math.round(player.x), hy: Math.round(player.y),
                         sp: player.score, se: enemy.score,
@@ -689,7 +697,6 @@
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
                 enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); 
 
-                // AĞ OPTİMİZASYONU: Guest de sadece yer değiştirdiğinde ve 30ms'de bir yollar
                 if (connection && (now - lastGuestNetUpdate > 30)) {
                     if (Math.abs(lastSentInput.x - enemy.x) > 1 || Math.abs(lastSentInput.y - enemy.y) > 1) {
                         connection.send({ type: 'i', x: Math.round(enemy.x), y: Math.round(enemy.y) });
@@ -741,7 +748,6 @@
                     ctx.rotate(Math.PI);
                     ctx.fillText(goalMessage, 0, -20);
                     ctx.shadowBlur = 0; ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
-                    // Ters çevrilmiş ekranda skoru doğru yönlendirmek
                     ctx.fillText(`Skor: ${enemy.score} - ${player.score}`, 0, 30);
                     ctx.restore();
                 } else {
