@@ -39,6 +39,7 @@
         #player-score { color: var(--player-color); text-shadow: 0 0 10px var(--player-color); }
         #enemy-score { color: var(--enemy-color); text-shadow: 0 0 10px var(--enemy-color); }
         
+        /* OYUN ALANI KAPSAYICISI (Canvas'ı döndürmek için) */
         #canvas-wrapper {
             position: relative;
             transition: transform 0.5s ease-in-out;
@@ -50,6 +51,7 @@
             display: block;
         }
         
+        /* GUEST EKRANINI 180 DERECE ÇEVİREN SINIF */
         .mirrored-view { transform: rotate(180deg); }
 
         .controls-info { position: absolute; bottom: 20px; color: rgba(255, 255, 255, 0.5); font-size: 13px; letter-spacing: 1px; text-align: center; pointer-events: none; }
@@ -205,8 +207,10 @@
         let isDragging = false;
         let dragTarget = { x: canvas.width / 2, y: canvas.height - 50 };
 
-        // Ağ optimizasyonu için veri gönderme kontrolü
+        // NETWORK OPTİMİZASYON DEĞİŞKENLERİ (Lagı çözen yapı)
         let lastSentInput = { x: -1, y: -1 }; 
+        let lastNetUpdate = 0;
+        let lastGuestNetUpdate = 0;
 
         // --- DOKUNMATİK KONTROL (MİRRORED VIEW UYUMLU) ---
         function updateDragTarget(e) {
@@ -276,23 +280,18 @@
 
         const goalWidth = 130; 
 
-        // --- İSİM ALMA FONKSİYONU ---
-        function getMyName() {
-            let n = document.getElementById('player-name-input').value.trim();
-            return n === "" ? (isHost ? "Host" : (isGuest ? "Guest" : "Sen")) : n;
-        }
-
         // --- MENÜ BUTONLARI ---
         document.getElementById('btn-play-ai').addEventListener('click', () => {
             gameMode = "ai";
-            myName = getMyName();
+            let inputName = document.getElementById('player-name-input').value.trim();
+            myName = inputName === "" ? "Sen" : inputName;
             enemyName = "A.I. Model";
             
             enemy.speed = parseFloat(document.getElementById('difficulty-select').value);
             targetScore = parseInt(document.getElementById('target-score-select').value);
             
             document.getElementById('enemy-label').innerText = enemyName;
-            document.getElementById('player-label').innerText = myName + " (Sen)";
+            document.getElementById('player-label').innerText = myName;
             canvasWrapper.classList.remove('mirrored-view'); 
             
             startMatch();
@@ -313,6 +312,10 @@
         // HOST OL
         document.getElementById('btn-create-room').addEventListener('click', () => {
             gameMode = "online";
+            isHost = true;
+            let inputName = document.getElementById('player-name-input').value.trim();
+            myName = inputName === "" ? "Host" : inputName;
+
             targetScore = parseInt(document.getElementById('target-score-select').value);
             document.getElementById('mode-selection').classList.add('hidden-group');
             document.getElementById('host-waiting').classList.remove('hidden-group');
@@ -324,23 +327,22 @@
 
             myPeer.on('connection', (conn) => {
                 connection = conn;
-                isHost = true;
-                myName = getMyName();
                 
-                // Host, bağlanan Guest'e kendi ismini ve kuralları (Hedef skor) yollar
+                // Bağlantı kurulduğunda Host, ismini Guest'e gönderir
                 connection.on('open', () => {
                     connection.send({ type: 'handshake', name: myName, targetScore: targetScore });
                 });
 
                 connection.on('data', (data) => {
                     if (data.type === 'handshake') {
+                        // Host Guest'in ismini alır
                         enemyName = data.name || "Guest";
-                        document.getElementById('enemy-label').innerText = enemyName;
-                        document.getElementById('player-label').innerText = myName + " (Sen)";
+                        document.getElementById('enemy-label').innerText = enemyName; // Kırmızı (Üst) Rakip
+                        document.getElementById('player-label').innerText = myName + " (Sen)"; // Mavi (Alt) Biziz
                         canvasWrapper.classList.remove('mirrored-view'); 
                         startMatch();
                     }
-                    if (data.type === 'input') {
+                    if (data.type === 'i') {
                         enemy.x = data.x;
                         enemy.y = data.y;
                     }
@@ -359,37 +361,41 @@
             
             document.getElementById('btn-join-room').innerText = "Bağlanıyor...";
             gameMode = "online";
-            myName = getMyName();
+            isGuest = true;
+            let inputName = document.getElementById('player-name-input').value.trim();
+            myName = inputName === "" ? "Guest" : inputName;
 
             myPeer = new Peer();
             myPeer.on('open', () => {
                 connection = myPeer.connect(code);
                 
                 connection.on('open', () => {
-                    isGuest = true;
                     dragTarget = { x: enemy.x, y: enemy.y }; 
                     
                     // Guest, Host'a kendi ismini yollar
                     connection.send({ type: 'handshake', name: myName });
                     
                     connection.on('data', (data) => {
-                        // Host'un ismini ve skor sınırını al
                         if (data.type === 'handshake') {
+                            // Guest Host'un ismini alır
                             enemyName = data.name || "Host";
                             targetScore = data.targetScore;
-                            document.getElementById('enemy-label').innerText = enemyName;
-                            document.getElementById('player-label').innerText = myName + " (Sen)";
-                            canvasWrapper.classList.add('mirrored-view'); // Guest ekranı döndürülür
+                            
+                            // GUEST İÇİN İSİM EŞLEŞMESİ: Guest kırmızıdır (enemy)
+                            document.getElementById('enemy-label').innerText = myName + " (Sen)"; 
+                            document.getElementById('player-label').innerText = enemyName; 
+                            
+                            canvasWrapper.classList.add('mirrored-view'); 
                             startMatch();
                         }
-                        else if (data.type === 'state') {
-                            puck.x = data.puck.x; puck.y = data.puck.y;
-                            player.x = data.player.x; player.y = data.player.y;
-                            player.score = data.score.player; enemy.score = data.score.enemy;
+                        else if (data.type === 's') { // Optimize edilmiş durum paketi (s)
+                            puck.x = data.px; puck.y = data.py;
+                            player.x = data.hx; player.y = data.hy;
+                            player.score = data.sp; enemy.score = data.se;
                             
-                            if (gameState !== data.gameState) {
-                                gameState = data.gameState;
-                                goalMessage = data.goalMessage;
+                            if (gameState !== data.gs) {
+                                gameState = data.gs;
+                                goalMessage = data.gm;
                                 
                                 if (gameState === "gameover") showGameOver();
                                 else if (gameState === "playing") {
@@ -456,6 +462,7 @@
                 title.innerText = iWon ? "KAZANDIN! 🏆" : "KAYBETTİN! 🥺";
                 title.style.color = iWon ? "var(--player-color)" : "var(--enemy-color)";
                 
+                // Guest ekranında kendi skoru "enemy.score"dur
                 let mySc = isHost ? player.score : enemy.score;
                 let opSc = isHost ? enemy.score : player.score;
                 document.getElementById('final-score-text').innerText = `${myName} ${mySc} - ${opSc} ${enemyName}`;
@@ -544,7 +551,6 @@
             }
         }
 
-        // Gol ve Başlangıç sonrası merkezde sıfırlanma
         function resetPuck() {
             puck.x = canvas.width / 2; puck.y = canvas.height / 2;
             puck.vx = 0; puck.vy = 0; 
@@ -566,10 +572,10 @@
             
             if (scorer === 'player') {
                 player.score++;
-                goalMessage = `GOL! (${isHost ? myName : myName})`; 
+                goalMessage = `GOL! (${myName.toUpperCase()})`; 
             } else {
                 enemy.score++;
-                goalMessage = `GOL! (${enemyName})`; 
+                goalMessage = `GOL! (${enemyName.toUpperCase()})`; 
             }
 
             if (player.score >= targetScore || enemy.score >= targetScore) {
@@ -579,14 +585,16 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    resetPuck(); // Her zaman merkeze sıfırla
+                    resetPuck(); 
                     gameState = "playing";
                 }, 1500);
             }
         }
 
-        // --- GÜNCELLENEN OYUN DÖNGÜSÜ ---
+        // --- GÜNCELLENEN OYUN DÖNGÜSÜ (LAG YOK EDİLDİ) ---
         function update() {
+            let now = Date.now();
+
             if (gameMode === "ai" || isHost) {
                 if (isDragging) {
                     let dx = dragTarget.x - player.x; let dy = dragTarget.y - player.y;
@@ -650,15 +658,16 @@
                 checkCollision(player, puck); 
                 checkCollision(enemy, puck); 
 
-                // NETWORK OPTİMİZASYONU: Host veriyi her karede yollar (Puck'ı pürüzsüz görmek için bu gerekli)
-                if (isHost && connection) {
+                // AĞ OPTİMİZASYONU: Sadece 30ms'de bir gönder (Ping'i öldürür) ve paket ismini küçült
+                if (isHost && connection && (now - lastNetUpdate > 30)) {
                     connection.send({
-                        type: 'state',
-                        puck: { x: Math.round(puck.x), y: Math.round(puck.y) },
-                        player: { x: Math.round(player.x), y: Math.round(player.y) },
-                        score: { player: player.score, enemy: enemy.score },
-                        gameState: gameState, goalMessage: goalMessage
+                        type: 's', // state
+                        px: Math.round(puck.x), py: Math.round(puck.y),
+                        hx: Math.round(player.x), hy: Math.round(player.y),
+                        sp: player.score, se: enemy.score,
+                        gs: gameState, gm: goalMessage
                     });
+                    lastNetUpdate = now;
                 }
                 
                 document.getElementById("player-score").innerText = player.score;
@@ -680,11 +689,12 @@
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
                 enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); 
 
-                // NETWORK OPTİMİZASYONU: Guest sadece pozisyonu DEĞİŞTİĞİNDE (1px den fazla fark varsa) veri yollar
-                if (connection) {
+                // AĞ OPTİMİZASYONU: Guest de sadece yer değiştirdiğinde ve 30ms'de bir yollar
+                if (connection && (now - lastGuestNetUpdate > 30)) {
                     if (Math.abs(lastSentInput.x - enemy.x) > 1 || Math.abs(lastSentInput.y - enemy.y) > 1) {
-                        connection.send({ type: 'input', x: Math.round(enemy.x), y: Math.round(enemy.y) });
+                        connection.send({ type: 'i', x: Math.round(enemy.x), y: Math.round(enemy.y) });
                         lastSentInput = { x: enemy.x, y: enemy.y };
+                        lastGuestNetUpdate = now;
                     }
                 }
                 
@@ -731,6 +741,7 @@
                     ctx.rotate(Math.PI);
                     ctx.fillText(goalMessage, 0, -20);
                     ctx.shadowBlur = 0; ctx.font = "bold 20px 'Segoe UI'"; ctx.fillStyle = "#cbd5e1";
+                    // Ters çevrilmiş ekranda skoru doğru yönlendirmek
                     ctx.fillText(`Skor: ${enemy.score} - ${player.score}`, 0, 30);
                     ctx.restore();
                 } else {
