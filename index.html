@@ -667,7 +667,8 @@
                 checkCollision(player, puck); 
                 checkCollision(enemy, puck); 
 
-                if (isHost && connection && (now - lastNetUpdate > 30)) {
+                // HOST'TAN GUEST'E VERİ GÖNDERME HIZI (30'dan 12'ye düşürüldü -> 60 FPS)
+                if (isHost && connection && (now - lastNetUpdate > 12)) {
                     connection.send({
                         type: 's', 
                         px: Math.round(puck.x), py: Math.round(puck.y),
@@ -697,7 +698,8 @@
                 enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x));
                 enemy.y = Math.max(enemy.radius, Math.min(canvas.height / 2 - enemy.radius, enemy.y)); 
 
-                if (connection && (now - lastGuestNetUpdate > 30)) {
+                // GUEST'TEN HOST'A VERİ GÖNDERME HIZI (30'dan 12'ye düşürüldü -> 60 FPS)
+                if (connection && (now - lastGuestNetUpdate > 12)) {
                     if (Math.abs(lastSentInput.x - enemy.x) > 1 || Math.abs(lastSentInput.y - enemy.y) > 1) {
                         connection.send({ type: 'i', x: Math.round(enemy.x), y: Math.round(enemy.y) });
                         lastSentInput = { x: enemy.x, y: enemy.y };
